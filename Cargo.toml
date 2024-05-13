@@ -1,0 +1,17 @@
+[package]
+name = "spools"
+version = "0.1.0"
+edition = "2021"
+authors = ["Lux Aliaga <lux@nixgoat.me>", "aoife cassidy <aoife@enby.space>"]
+repository = "https://git.sr.ht/~nixgoat/spools"
+license = "LGPL-3.0-or-later"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.83"
+rand = "0.8"
+reqwest = { version = "0.12.4", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.37.0", features = ["full"] }
