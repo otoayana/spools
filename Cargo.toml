@@ -3,6 +3,7 @@ name = "spools"
 version = "0.1.0"
 edition = "2021"
 authors = ["Lux Aliaga <lux@nixgoat.me>", "aoife cassidy <aoife@enby.space>"]
+description = "Content scraping library for Instagram's Threads"
 repository = "https://git.sr.ht/~nixgoat/spools"
 license = "LGPL-3.0-or-later"
 
