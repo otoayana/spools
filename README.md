@@ -2,7 +2,7 @@
 
 [![docs.rs](https://img.shields.io/docsrs/spools)](https://docs.rs/spools) [![Crates.io Total Downloads](https://img.shields.io/crates/d/spools)](https://lib.rs/spools)
 
-spools is a content scraping library for instagram's [Threads](https://threads.net).
+spools is a content scraping library for Instagram's [Threads](https://threads.net).
 spools aims to provide a more comfortable interface than Threads' cumbersome and obfuscated
 internal API, with the added bonus of not requiring an account.
 

@@ -5,6 +5,7 @@ edition = "2021"
 authors = ["Lux Aliaga <lux@nixgoat.me>", "aoife cassidy <aoife@enby.space>"]
 description = "Content scraping library for Instagram's Threads"
 repository = "https://git.sr.ht/~nixgoat/spools"
+documentation = "https://docs.rs/spools"
 license = "LGPL-3.0-or-later"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
