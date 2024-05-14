@@ -1,6 +1,6 @@
 # spools 🧵
 
-[![docs.rs](https://img.shields.io/docsrs/spools)](https://docs.rs/spools) [![Crates.io Total Downloads](https://img.shields.io/crates/d/spools)](https://lib.rs/spools)
+[![docs.rs](https://img.shields.io/docsrs/spools)](https://docs.rs/spools) [![Crates.io Total Downloads](https://img.shields.io/crates/d/spools)](https://lib.rs/spools) [![builds.sr.ht status](https://builds.sr.ht/~nixgoat/spools.svg)](https://builds.sr.ht/~nixgoat/spools?)
 
 spools is a content scraping library for Instagram's [Threads](https://threads.net).
 spools aims to provide a more comfortable interface than Threads' cumbersome and obfuscated

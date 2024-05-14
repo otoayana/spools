@@ -1,0 +1,13 @@
+image: alpine/edge
+packages:
+  - cargo
+  - openssl-dev
+sources:
+  - https://git.sr.ht/~nixgoat/spools
+tasks:
+  - build: |
+      cd spools
+      cargo build --release
+  - test: |
+      cd spools
+      cargo test --release
