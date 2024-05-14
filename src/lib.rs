@@ -34,6 +34,7 @@ use tokio::task;
 pub struct Post {
     pub id: String,
     pub name: String,
+    pub date: u64,
     pub body: Option<String>,
     pub media: Option<Vec<Media>>,
     pub likes: u64,
@@ -341,6 +342,14 @@ impl Threads {
             .to_owned()
             .unwrap();
 
+        // Get the post's date
+        let date = post
+            .pointer("/taken_at")
+            .unwrap()
+            .as_u64()
+            .to_owned()
+            .unwrap();
+
         // Get the post's body
         let body = post
             .pointer("/caption/text")
@@ -489,6 +498,7 @@ impl Threads {
         Ok(Some(Post {
             id: fullid,
             name: tag.to_string(),
+            date,
             body: Some(body.to_string()),
             media,
             likes: post["like_count"].as_u64().unwrap_or(0),
