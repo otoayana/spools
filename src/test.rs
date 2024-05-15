@@ -1,15 +1,15 @@
 use crate::Threads;
 
-#[test]
-fn new_client() {
+#[tokio::test]
+async fn new_client() {
     let client = Threads::new();
     assert!(client.is_ok());
 }
 
-#[test]
-fn fetch_existing_user() {
+#[tokio::test]
+async fn fetch_existing_user() {
     let client = Threads::new().unwrap();
-    let resp = client.fetch_user("zuck");
+    let resp = client.fetch_user("zuck").await;
     assert!(resp.is_ok());
 
     let maybe_user = resp.unwrap();
@@ -20,20 +20,20 @@ fn fetch_existing_user() {
     assert_eq!(user.id, 314216);
 }
 
-#[test]
-fn fetch_nonexistent_user() {
+#[tokio::test]
+async fn fetch_nonexistent_user() {
     let client = Threads::new().unwrap();
-    let resp = client.fetch_user("cant-have-dashes");
+    let resp = client.fetch_user("cant-have-dashes").await;
     assert!(resp.is_ok());
 
     let maybe_user = resp.unwrap();
     assert!(maybe_user.is_none());
 }
 
-#[test]
-fn fetch_existing_post() {
+#[tokio::test]
+async fn fetch_existing_post() {
     let client = Threads::new().unwrap();
-    let resp = client.fetch_post("C6EbeLPxovW");
+    let resp = client.fetch_post("C6EbeLPxovW").await;
     assert!(resp.is_ok());
 
     let maybe_post = resp.unwrap();
@@ -43,10 +43,10 @@ fn fetch_existing_post() {
     assert_eq!(post.id, "3351924843586423766");
 }
 
-#[test]
-fn fetch_nonexistent_post() {
+#[tokio::test]
+async fn fetch_nonexistent_post() {
     let client = Threads::new().unwrap();
-    let resp = client.fetch_post("foo");
+    let resp = client.fetch_post("foo").await;
     assert!(resp.is_ok());
 
     let maybe_post = resp.unwrap();

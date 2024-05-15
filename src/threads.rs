@@ -43,7 +43,6 @@ impl Threads {
     }
 
     /// Send a GraphQL query to Threads and return a JSON document
-    #[tokio::main]
     async fn query(&self, variables: &str, doc_id: &str) -> Result<Value> {
         // Meta uses 11 characters, though 12 also works
         let lsd = Alphanumeric.sample_string(&mut rand::thread_rng(), 11);
@@ -68,7 +67,6 @@ impl Threads {
     }
 
     /// Retrieve full post ID from short ID
-    #[tokio::main]
     async fn full_id(&self, id: &str) -> Result<Option<String>> {
         let resp = self
             .client
@@ -100,13 +98,15 @@ impl Threads {
     }
 
     /// Fetch user information
-    #[tokio::main]
     pub async fn fetch_user(&self, tag: &str) -> Result<Option<User>> {
         // Executes request to get user info from the username
-        let variables: String = format!("\"username\":\"{}\"", tag);
+        let variables = format!("\"username\":\"{}\"", tag);
+
         let cloned = self.clone();
+
         let resp =
-            task::spawn_blocking(move || cloned.query(&variables, "7394812507255098")).await??;
+            task::spawn(async move { cloned.clone().query(&variables, "7394812507255098").await })
+                .await??;
 
         // Gets tree location for value
         let parent = resp
@@ -164,7 +164,7 @@ impl Threads {
         let cloned = self.clone();
         let id_var = format!("\"userID\":\"{}\"", unquot[0]);
         let id_resp =
-            task::spawn_blocking(move || cloned.query(&id_var, "25253062544340717")).await??;
+            task::spawn(async move { cloned.query(&id_var, "25253062544340717").await }).await??;
 
         // Gets user's bio links
         let links_parent = id_resp
@@ -180,10 +180,10 @@ impl Threads {
         }
 
         // Executes a request to get the user's posts
-        let cloned = self.clone();
+        let cloned: Threads = self.clone();
         let post_var = format!("\"userID\":\"{}\"", unquot[0]);
         let post_resp =
-            task::spawn_blocking(move || cloned.query(&post_var, "7357407954367176")).await??;
+            task::spawn(async move { cloned.query(&post_var, "7357407954367176").await }).await??;
 
         // Gets users' posts
         let edges = post_resp
@@ -216,12 +216,11 @@ impl Threads {
     }
 
     /// Fetch post information
-    #[tokio::main]
     pub async fn fetch_post(&self, id: &str) -> Result<Option<Post>> {
         // Since there's no endpoint for getting full IDs out of short ones, fetch it from post URL
         let inner_id = id.to_owned();
         let cloned = self.clone();
-        let id_req = task::spawn_blocking(move || cloned.full_id(&inner_id)).await??;
+        let id_req = task::spawn(async move { cloned.full_id(&inner_id.as_str()).await }).await??;
 
         if id_req.is_none() {
             return Ok(None);
@@ -231,9 +230,9 @@ impl Threads {
 
         // Now we can fetch the actual post
         let variables = format!("\"postID\":\"{}\"", &fullid);
-        let cloned = self.clone();
+	let cloned: Threads = self.clone();
         let resp =
-            task::spawn_blocking(move || cloned.query(&variables, "26262423843344977")).await??;
+            task::spawn(async move { cloned.query(&variables, "26262423843344977").await }).await??;
 
         let check = resp.pointer("/data/data/edges");
 
