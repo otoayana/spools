@@ -230,9 +230,9 @@ impl Threads {
 
         // Now we can fetch the actual post
         let variables = format!("\"postID\":\"{}\"", &fullid);
-	let cloned: Threads = self.clone();
-        let resp =
-            task::spawn(async move { cloned.query(&variables, "26262423843344977").await }).await??;
+        let cloned: Threads = self.clone();
+        let resp = task::spawn(async move { cloned.query(&variables, "26262423843344977").await })
+            .await??;
 
         let check = resp.pointer("/data/data/edges");
 
@@ -294,12 +294,19 @@ impl Threads {
             .unwrap();
 
         // Get the post's body
-        let body = post
-            .pointer("/caption/text")
-            .unwrap()
-            .as_str()
-            .to_owned()
-            .unwrap();
+        let maybe_body = post.pointer("/caption/text");
+
+        let body: Option<String>;
+
+        if let Some(object) = maybe_body {
+            if let Value::String(string) = object {
+                body = Some(string.as_str().to_owned().to_string());
+            } else {
+		body = None
+	    }
+        } else {
+            body = None;
+        }
 
         // Locations for singular media
         let video_location = post.pointer("/video_versions").unwrap_or(&Value::Null);
@@ -442,7 +449,7 @@ impl Threads {
             id: fullid,
             name: tag.to_string(),
             date,
-            body: Some(body.to_string()),
+            body: body,
             media,
             likes: post["like_count"].as_u64().unwrap_or(0),
             reposts: post
