@@ -52,3 +52,61 @@ async fn fetch_nonexistent_post() {
     let maybe_post = resp.unwrap();
     assert!(maybe_post.is_none());
 }
+
+#[tokio::test]
+async fn fetch_user_posts() {
+	let client = Threads::new().unwrap();
+	let user_resp = client.fetch_user("zuck").await;
+	assert!(user_resp.is_ok());
+
+	let maybe_user = user_resp.unwrap();
+	assert!(maybe_user.is_some());
+    
+	let user = maybe_user.unwrap();
+	println!("{:#?}", user);
+    
+	let posts = user.fetch_posts(None).await;
+	assert!(posts.is_ok());
+
+	let resp = posts.unwrap();
+	println!("{:#?}", resp);
+
+	assert!(resp.len() > 0);
+}
+
+#[tokio::test]
+async fn fetch_user_posts_limit() {
+	let client = Threads::new().unwrap();
+	let user_resp = client.fetch_user("zuck").await;
+	assert!(user_resp.is_ok());
+
+	let maybe_user = user_resp.unwrap();
+	assert!(maybe_user.is_some());
+    
+	let user = maybe_user.unwrap();
+	println!("{:#?}", user);
+    
+	let posts = user.fetch_posts(Some(0..3)).await;
+	assert!(posts.is_ok());
+
+	let resp = posts.unwrap();
+	println!("{:#?}", resp);
+
+	assert!(resp.len() == 3);
+}
+
+#[tokio::test]
+async fn fetch_user_posts_overlimit() {
+	let client = Threads::new().unwrap();
+	let user_resp = client.fetch_user("zuck").await;
+	assert!(user_resp.is_ok());
+
+	let maybe_user = user_resp.unwrap();
+	assert!(maybe_user.is_some());
+    
+	let user = maybe_user.unwrap();
+	println!("{:#?}", user);
+    
+	let posts = user.fetch_posts(Some(28..40)).await;
+	assert!(posts.is_err());
+}
