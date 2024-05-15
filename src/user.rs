@@ -19,7 +19,7 @@ pub struct User {
 }
 
 impl User {
-    ///
+    /// Fetches a user's posts
     pub async fn fetch_posts(&self, limit: Option<Range<usize>>) -> Result<Vec<Post>> {
         let mut posts: Vec<Post> = vec![];
 
