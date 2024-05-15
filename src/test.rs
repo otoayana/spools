@@ -110,3 +110,45 @@ async fn fetch_user_posts_overlimit() {
 	let posts = user.fetch_posts(Some(28..40)).await;
 	assert!(posts.is_err());
 }
+
+#[tokio::test]
+async fn fetch_post_parents() {
+	let client = Threads::new().unwrap();
+	let post_resp = client.fetch_post("C6brVPxR1fZ").await;
+	assert!(post_resp.is_ok());
+
+	let maybe_post = post_resp.unwrap();
+	assert!(maybe_post.is_some());
+    
+	let post = maybe_post.unwrap();
+	println!("{:#?}", post);
+    
+	let posts = post.fetch_parents(None).await;
+	assert!(posts.is_ok());
+
+	let resp = posts.unwrap();
+	println!("{:#?}", resp);
+
+	assert!(resp[0].id == "3358445536292748283");
+}
+
+#[tokio::test]
+async fn fetch_post_replies() {
+	let client = Threads::new().unwrap();
+	let post_resp = client.fetch_post("C6bmGvkObv7").await;
+	assert!(post_resp.is_ok());
+
+	let maybe_post = post_resp.unwrap();
+	assert!(maybe_post.is_some());
+    
+	let post = maybe_post.unwrap();
+	println!("{:#?}", post);
+    
+	let posts = post.fetch_replies(Some(0..1)).await;
+	assert!(posts.is_ok());
+
+	let resp = posts.unwrap();
+	println!("{:#?}", resp);
+
+	assert!(resp[0].id == "3358468523176712153");
+}
