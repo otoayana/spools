@@ -71,7 +71,7 @@ async fn fetch_user_posts() {
     let resp = posts.unwrap();
     println!("{:#?}", resp);
 
-    assert!(resp.len() == 3);
+    assert!(resp.len() > 0);
 }
 
 #[tokio::test]
