@@ -27,14 +27,8 @@ impl User {
             let mut cloned = ids.clone();
 
             if let Some(num) = limit {
-                for x in num.clone() {
-                    if x >= cloned.len() {
-                        return Err(Error::msg(format!(
-                            "requested {} posts, but only {} exist",
-                            num.len(),
-                            cloned.len()
-                        )));
-                    }
+                if num.clone().into_iter().any(|x| x >= cloned.len()) {
+                    return Err(Error::msg("range is out of bounds"));
                 }
 
                 cloned = cloned[num].to_vec();
