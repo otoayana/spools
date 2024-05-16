@@ -38,9 +38,7 @@ impl User {
                 let thread = Threads::new()?;
                 let req =
                     task::spawn(async move { thread.fetch_post(post.as_str()).await }).await??;
-                if let Some(resp) = req {
-                    posts.push(resp)
-                }
+                posts.push(req)
             }
         }
 

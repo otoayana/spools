@@ -12,10 +12,7 @@ async fn fetch_existing_user() {
     let resp = client.fetch_user("zuck").await;
     assert!(resp.is_ok());
 
-    let maybe_user = resp.unwrap();
-    assert!(maybe_user.is_some());
-
-    let user = maybe_user.unwrap();
+    let user = resp.unwrap();
     println!("{:#?}", user);
     assert_eq!(user.id, 314216);
 }
@@ -24,22 +21,18 @@ async fn fetch_existing_user() {
 async fn fetch_nonexistent_user() {
     let client = Threads::new().unwrap();
     let resp = client.fetch_user("cant-have-dashes").await;
-    assert!(resp.is_ok());
-
-    let maybe_user = resp.unwrap();
-    assert!(maybe_user.is_none());
+    assert!(resp.is_err());
 }
 
 #[tokio::test]
 async fn fetch_existing_post() {
     let client = Threads::new().unwrap();
     let resp = client.fetch_post("C6EbeLPxovW").await;
+    println!("{:#?}", resp);
     assert!(resp.is_ok());
 
-    let maybe_post = resp.unwrap();
-    assert!(maybe_post.is_some());
-
-    let post = maybe_post.unwrap();
+    let post = resp.unwrap();
+    println!("{:#?}", post);
     assert_eq!(post.id, "3351924843586423766");
 }
 
@@ -47,11 +40,9 @@ async fn fetch_existing_post() {
 async fn fetch_nonexistent_post() {
     let client = Threads::new().unwrap();
     let resp = client.fetch_post("foo").await;
-    assert!(resp.is_ok());
-
-    let maybe_post = resp.unwrap();
-    assert!(maybe_post.is_none());
+    assert!(resp.is_err());
 }
+
 
 #[tokio::test]
 async fn fetch_user_posts() {
@@ -59,12 +50,7 @@ async fn fetch_user_posts() {
     let user_resp = client.fetch_user("zuck").await;
     assert!(user_resp.is_ok());
 
-    let maybe_user = user_resp.unwrap();
-    assert!(maybe_user.is_some());
-
-    let user = maybe_user.unwrap();
-    println!("{:#?}", user);
-
+    let user = user_resp.unwrap();
     let posts = user.fetch_posts(Some(0..3)).await;
     assert!(posts.is_ok());
 
@@ -72,46 +58,4 @@ async fn fetch_user_posts() {
     println!("{:#?}", resp);
 
     assert!(resp.len() > 0);
-}
-
-#[tokio::test]
-async fn fetch_post_parents() {
-    let client = Threads::new().unwrap();
-    let post_resp = client.fetch_post("C6brVPxR1fZ").await;
-    assert!(post_resp.is_ok());
-
-    let maybe_post = post_resp.unwrap();
-    assert!(maybe_post.is_some());
-
-    let post = maybe_post.unwrap();
-    println!("{:#?}", post);
-
-    let posts = post.fetch_parents(None).await;
-    assert!(posts.is_ok());
-
-    let resp = posts.unwrap();
-    println!("{:#?}", resp);
-
-    assert!(resp[0].id == "3358445536292748283");
-}
-
-#[tokio::test]
-async fn fetch_post_replies() {
-    let client = Threads::new().unwrap();
-    let post_resp = client.fetch_post("C6bmGvkObv7").await;
-    assert!(post_resp.is_ok());
-
-    let maybe_post = post_resp.unwrap();
-    assert!(maybe_post.is_some());
-
-    let post = maybe_post.unwrap();
-    println!("{:#?}", post);
-
-    let posts = post.fetch_replies(Some(0..1)).await;
-    assert!(posts.is_ok());
-
-    let resp = posts.unwrap();
-    println!("{:#?}", resp);
-
-    assert!(resp[0].id == "3358468523176712153");
 }

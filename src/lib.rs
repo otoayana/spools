@@ -14,7 +14,7 @@
 //! # async fn run() -> Result<()> {
 //! let client = spools::Threads::new()?;
 //! let user = client.fetch_user("zuck").await?;
-//! if let Some(posts) = user.unwrap().posts {
+//! if let Some(posts) = user.posts {
 //!     let post = client.fetch_post(&posts[0]).await?;
 //! };
 //! #     Ok(())

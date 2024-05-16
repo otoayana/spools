@@ -3,7 +3,7 @@ use crate::{
     post::Post,
     user::User,
 };
-use anyhow::Result;
+use anyhow::{Error, Result};
 use rand::distributions::{Alphanumeric, DistString};
 use reqwest::{header, Client};
 use serde_json::Value;
@@ -97,8 +97,211 @@ impl Threads {
         Ok(Some(id))
     }
 
+    /// Deserialize the JSON query for a post
+    pub fn deserialize_post(&self, query: &Value) -> Result<Post> {
+        if let Some(post) = query.pointer("/post") {
+            let id = post
+                .pointer("/pk")
+                .unwrap()
+                .as_str()
+                .to_owned()
+                .unwrap()
+                .to_string();
+
+            // Get the post's author
+            let tag = post
+                .pointer("/user/username")
+                .unwrap()
+                .as_str()
+                .to_owned()
+                .unwrap();
+
+            // Get the post's date
+            let date = post
+                .pointer("/taken_at")
+                .unwrap()
+                .as_u64()
+                .to_owned()
+                .unwrap();
+
+            // Get the post's body
+            let maybe_body = post.pointer("/caption/text");
+
+            let body: Option<String>;
+
+            if let Some(object) = maybe_body {
+                if let Value::String(string) = object {
+                    body = Some(string.as_str().to_owned().to_string());
+                } else {
+                    body = None
+                }
+            } else {
+                body = None;
+            }
+
+            // Locations for singular media
+            let video_location = post.pointer("/video_versions").unwrap_or(&Value::Null);
+            let image_location = post
+                .pointer("/image_versions2/candidates")
+                .unwrap_or(&Value::Null);
+
+            // Locations for carousel media
+            let carousel_location = post.pointer("/carousel_media").unwrap_or(&Value::Null);
+
+            // Define media variables
+            let mut media: Option<Vec<Media>> = None;
+            let mut media_vec: Vec<Media> = vec![];
+
+            // Check where media could be, if there is any
+            if carousel_location.is_array() {
+                // Carousel media
+                let carousel_array = carousel_location.as_array().unwrap();
+                for node in carousel_array {
+                    // Initial values
+                    let mut kind = MediaKind::Image;
+                    let content: String;
+                    let mut alt: Option<String> = None;
+                    let mut thumbnail: Option<String> = None;
+
+                    // Image
+                    let node_image_location = &node
+                        .pointer("/image_versions2/candidates")
+                        .unwrap()
+                        .as_array()
+                        .unwrap()[0];
+                    let node_video_location =
+                        node.pointer("/video_versions").unwrap_or(&Value::Null);
+
+                    // CDN URL
+                    let image_url = node_image_location["url"]
+                        .as_str()
+                        .to_owned()
+                        .unwrap()
+                        .to_string();
+
+                    // Alt text
+                    if !node["accessibility_caption"].is_null() {
+                        alt = Some(
+                            node["accessibility_caption"]
+                                .as_str()
+                                .to_owned()
+                                .unwrap()
+                                .to_string(),
+                        );
+                    }
+
+                    let image = image_url.clone();
+
+                    // Video
+                    if node_video_location.is_array() {
+                        let video_array = node_video_location.as_array().unwrap();
+
+                        let video = video_array[0]["url"]
+                            .as_str()
+                            .to_owned()
+                            .unwrap()
+                            .to_string();
+
+                        kind = MediaKind::Video;
+                        content = video;
+                        thumbnail = Some(image);
+                    } else {
+                        content = image;
+                    }
+
+                    media_vec.push(Media {
+                        kind,
+                        alt,
+                        content,
+                        thumbnail,
+                    });
+                }
+            } else if image_location.is_array()
+                && image_location.as_array().unwrap_or(&vec![]).len() != 0
+            {
+                // Singular media
+                // Initial values
+                let mut kind = MediaKind::Image;
+                let content: String;
+                let mut alt: Option<String> = None;
+                let mut thumbnail: Option<String> = None;
+
+                // Gets the first image in URL, since it's in the highest quality
+                let image_array = image_location.as_array().unwrap();
+
+                let image_url = image_array[0]["url"]
+                    .as_str()
+                    .to_owned()
+                    .unwrap()
+                    .to_string();
+
+                // Alt text
+                if post["accessibility_caption"].is_string() {
+                    alt = Some(
+                        post["accessibility_caption"]
+                            .as_str()
+                            .to_owned()
+                            .unwrap()
+                            .to_string(),
+                    );
+                }
+
+                let image = image_url.clone();
+
+                // Video
+                if video_location.is_array() {
+                    let video_array = video_location.as_array().unwrap();
+                    let video = video_array[0]["url"]
+                        .as_str()
+                        .to_owned()
+                        .unwrap()
+                        .to_string();
+
+                    kind = MediaKind::Video;
+                    content = video;
+                    thumbnail = Some(image);
+                } else {
+                    content = image;
+                }
+
+                media_vec.push(Media {
+                    kind,
+                    alt,
+                    content,
+                    thumbnail,
+                })
+            }
+
+            // If there was media, we add it to the response.
+            if media_vec.len() != 0 {
+                media = Some(media_vec);
+            }
+
+            let parents = vec![];
+            let replies = vec![];
+
+            Ok(Post {
+                id,
+                name: tag.to_string(),
+                date,
+                body,
+                media,
+                likes: post["like_count"].as_u64().unwrap_or(0),
+                reposts: post
+                    .pointer("/text_post_app_info/repost_count")
+                    .unwrap()
+                    .as_u64()
+                    .unwrap_or(0),
+                parents,
+                replies,
+            })
+        } else {
+            Err(Error::msg("not a post"))
+        }
+    }
+
     /// Fetch user information
-    pub async fn fetch_user(&self, tag: &str) -> Result<Option<User>> {
+    pub async fn fetch_user(&self, tag: &str) -> Result<User> {
         // Executes request to get user info from the username
         let variables = format!("\"username\":\"{}\"", tag);
 
@@ -114,7 +317,7 @@ impl Threads {
             .unwrap_or(&Value::Null);
 
         if parent.is_null() {
-            return Ok(None);
+            return Err(Error::msg("not found"));
         }
 
         // Defines empty values
@@ -203,7 +406,7 @@ impl Threads {
             posts = Some(post_vec);
         }
 
-        Ok(Some(User {
+        Ok(User {
             id: unquot[0].parse::<u64>()?,
             name,
             pfp,
@@ -212,18 +415,18 @@ impl Threads {
             verified: parent["is_verified"].as_bool().unwrap_or(false),
             followers: parent["follower_count"].as_u64().unwrap_or(0),
             posts,
-        }))
+        })
     }
 
     /// Fetch post information
-    pub async fn fetch_post(&self, id: &str) -> Result<Option<Post>> {
+    pub async fn fetch_post(&self, id: &str) -> Result<Post> {
         // Since there's no endpoint for getting full IDs out of short ones, fetch it from post URL
         let inner_id = id.to_owned();
         let cloned = self.clone();
         let id_req = task::spawn(async move { cloned.full_id(&inner_id.as_str()).await }).await??;
 
         if id_req.is_none() {
-            return Ok(None);
+            return Err(Error::msg("not found"));
         }
 
         let fullid = id_req.unwrap_or(String::new());
@@ -237,18 +440,15 @@ impl Threads {
         let check = resp.pointer("/data/data/edges");
 
         if check.is_none() {
-            return Ok(None);
+            return Err(Error::msg("not a post"));
         }
 
         // Defines values for parents and replies
-        let mut parents: Option<Vec<String>> = None;
-        let mut replies: Option<Vec<String>> = None;
-
-        let mut parents_vec: Vec<String> = vec![];
-        let mut replies_vec: Vec<String> = vec![];
+        let mut parents: Vec<Post> = vec![];
+        let mut replies: Vec<Post> = vec![];
 
         // Defines values for post location
-        let mut post = &Value::Null;
+        let mut post: Post = Default::default();
         let mut post_found: bool = false;
 
         // Meta wrapping stuff in arrays -.-
@@ -258,207 +458,31 @@ impl Threads {
             let thread_items = node.pointer("/node/thread_items").unwrap_or(&Value::Null);
 
             if !thread_items.is_array() {
-                return Ok(None);
+                return Err(Error::msg("not a post"));
             }
 
             for item in thread_items.as_array().unwrap() {
-                let cur = item.pointer("/post").unwrap();
-                let code = cur["code"].as_str().to_owned().unwrap();
-                if code == id {
+                let builder = Threads::new()?;
+                let cur = builder.deserialize_post(item)?;
+
+                if cur.id == fullid {
                     post = cur;
                     post_found = true;
                 } else if !post_found {
-                    parents_vec.push(code.to_string());
-                    parents = Some(parents_vec.clone());
+                    parents.push(cur);
                 } else {
-                    replies_vec.push(code.to_string());
-                    replies = Some(replies_vec.clone());
+                    replies.push(cur);
                 }
             }
         }
 
-        // Get the post's author
-        let tag = post
-            .pointer("/user/username")
-            .unwrap()
-            .as_str()
-            .to_owned()
-            .unwrap();
-
-        // Get the post's date
-        let date = post
-            .pointer("/taken_at")
-            .unwrap()
-            .as_u64()
-            .to_owned()
-            .unwrap();
-
-        // Get the post's body
-        let maybe_body = post.pointer("/caption/text");
-
-        let body: Option<String>;
-
-        if let Some(object) = maybe_body {
-            if let Value::String(string) = object {
-                body = Some(string.as_str().to_owned().to_string());
-            } else {
-		body = None
-	    }
-        } else {
-            body = None;
+        if !post_found {
+            return Err(Error::msg("unknown error"));
         }
 
-        // Locations for singular media
-        let video_location = post.pointer("/video_versions").unwrap_or(&Value::Null);
-        let image_location = post
-            .pointer("/image_versions2/candidates")
-            .unwrap_or(&Value::Null);
+        post.parents = parents;
+        post.replies = replies;
 
-        // Locations for carousel media
-        let carousel_location = post.pointer("/carousel_media").unwrap_or(&Value::Null);
-
-        // Define media variables
-        let mut media: Option<Vec<Media>> = None;
-        let mut media_vec: Vec<Media> = vec![];
-
-        // Check where media could be, if there is any
-        if carousel_location.is_array() {
-            // Carousel media
-            let carousel_array = carousel_location.as_array().unwrap();
-            for node in carousel_array {
-                // Initial values
-                let mut kind = MediaKind::Image;
-                let content: String;
-                let mut alt: Option<String> = None;
-                let mut thumbnail: Option<String> = None;
-
-                // Image
-                let node_image_location = &node
-                    .pointer("/image_versions2/candidates")
-                    .unwrap()
-                    .as_array()
-                    .unwrap()[0];
-                let node_video_location = node.pointer("/video_versions").unwrap_or(&Value::Null);
-
-                // CDN URL
-                let image_url = node_image_location["url"]
-                    .as_str()
-                    .to_owned()
-                    .unwrap()
-                    .to_string();
-
-                // Alt text
-                if !node["accessibility_caption"].is_null() {
-                    alt = Some(
-                        node["accessibility_caption"]
-                            .as_str()
-                            .to_owned()
-                            .unwrap()
-                            .to_string(),
-                    );
-                }
-
-                let image = image_url.clone();
-
-                // Video
-                if node_video_location.is_array() {
-                    let video_array = node_video_location.as_array().unwrap();
-
-                    let video = video_array[0]["url"]
-                        .as_str()
-                        .to_owned()
-                        .unwrap()
-                        .to_string();
-
-                    kind = MediaKind::Video;
-                    content = video;
-                    thumbnail = Some(image);
-                } else {
-                    content = image;
-                }
-
-                media_vec.push(Media {
-                    kind,
-                    alt,
-                    content,
-                    thumbnail,
-                });
-            }
-        } else if image_location.is_array()
-            && image_location.as_array().unwrap_or(&vec![]).len() != 0
-        {
-            // Singular media
-            // Initial values
-            let mut kind = MediaKind::Image;
-            let content: String;
-            let mut alt: Option<String> = None;
-            let mut thumbnail: Option<String> = None;
-
-            // Gets the first image in URL, since it's in the highest quality
-            let image_array = image_location.as_array().unwrap();
-
-            let image_url = image_array[0]["url"]
-                .as_str()
-                .to_owned()
-                .unwrap()
-                .to_string();
-
-            // Alt text
-            if post["accessibility_caption"].is_string() {
-                alt = Some(
-                    post["accessibility_caption"]
-                        .as_str()
-                        .to_owned()
-                        .unwrap()
-                        .to_string(),
-                );
-            }
-
-            let image = image_url.clone();
-
-            // Video
-            if video_location.is_array() {
-                let video_array = video_location.as_array().unwrap();
-                let video = video_array[0]["url"]
-                    .as_str()
-                    .to_owned()
-                    .unwrap()
-                    .to_string();
-
-                kind = MediaKind::Video;
-                content = video;
-                thumbnail = Some(image);
-            } else {
-                content = image;
-            }
-
-            media_vec.push(Media {
-                kind,
-                alt,
-                content,
-                thumbnail,
-            })
-        }
-
-        // If there was media, we add it to the response.
-        if media_vec.len() != 0 {
-            media = Some(media_vec);
-        }
-
-        Ok(Some(Post {
-            id: fullid,
-            name: tag.to_string(),
-            date,
-            body: body,
-            media,
-            likes: post["like_count"].as_u64().unwrap_or(0),
-            reposts: post
-                .pointer("/text_post_app_info/repost_count")
-                .unwrap()
-                .as_u64()
-                .unwrap_or(0),
-            parents,
-            replies,
-        }))
+        Ok(post)
     }
 }
