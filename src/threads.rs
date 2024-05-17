@@ -1,6 +1,6 @@
 use crate::{
     media::{Media, MediaKind},
-    post::Post,
+    post::{Post, Subpost},
     user::User,
 };
 use anyhow::{Error, Result};
@@ -98,10 +98,10 @@ impl Threads {
     }
 
     /// Deserialize the JSON query for a post
-    pub fn deserialize_post(&self, query: &Value) -> Result<Post> {
+    fn subpost(&self, query: &Value) -> Result<Subpost> {
         if let Some(post) = query.pointer("/post") {
-            let id = post
-                .pointer("/pk")
+            let code = post
+                .pointer("/code")
                 .unwrap()
                 .as_str()
                 .to_owned()
@@ -125,18 +125,18 @@ impl Threads {
                 .unwrap();
 
             // Get the post's body
-            let maybe_body = post.pointer("/caption/text");
+            let maybe_req = post.pointer("/caption/text");
 
-            let body: Option<String>;
+            let body: String;
 
-            if let Some(object) = maybe_body {
-                if let Value::String(string) = object {
-                    body = Some(string.as_str().to_owned().to_string());
+            if let Some(maybe_body) = maybe_req {
+                if let Value::String(string) = maybe_body {
+                    body = string.as_str().to_owned().to_string();
                 } else {
-                    body = None
+                    return Err(Error::msg("invalid request"));
                 }
             } else {
-                body = None;
+                body = String::new();
             }
 
             // Locations for singular media
@@ -149,8 +149,7 @@ impl Threads {
             let carousel_location = post.pointer("/carousel_media").unwrap_or(&Value::Null);
 
             // Define media variables
-            let mut media: Option<Vec<Media>> = None;
-            let mut media_vec: Vec<Media> = vec![];
+            let mut media: Vec<Media> = vec![];
 
             // Check where media could be, if there is any
             if carousel_location.is_array() {
@@ -209,7 +208,7 @@ impl Threads {
                         content = image;
                     }
 
-                    media_vec.push(Media {
+                    media.push(Media {
                         kind,
                         alt,
                         content,
@@ -264,7 +263,7 @@ impl Threads {
                     content = image;
                 }
 
-                media_vec.push(Media {
+                media.push(Media {
                     kind,
                     alt,
                     content,
@@ -272,16 +271,8 @@ impl Threads {
                 })
             }
 
-            // If there was media, we add it to the response.
-            if media_vec.len() != 0 {
-                media = Some(media_vec);
-            }
-
-            let parents = vec![];
-            let replies = vec![];
-
-            Ok(Post {
-                id,
+            Ok(Subpost {
+                code,
                 name: tag.to_string(),
                 date,
                 body,
@@ -292,8 +283,6 @@ impl Threads {
                     .unwrap()
                     .as_u64()
                     .unwrap_or(0),
-                parents,
-                replies,
             })
         } else {
             Err(Error::msg("not a post"))
@@ -321,11 +310,11 @@ impl Threads {
         }
 
         // Defines empty values
-        let mut name: Option<String> = None;
-        let mut pfp: Option<String> = None;
-        let mut bio: Option<String> = None;
-        let mut links: Option<Vec<String>> = None;
-        let mut posts: Option<Vec<String>> = None;
+        let mut name: String = String::new();
+        let mut pfp: String = String::new();
+        let mut bio: String = String::new();
+        let mut links: Vec<String> = vec![];
+        let mut posts: Vec<Subpost> = vec![];
 
         // These variables need to be fetched as str, otherwise they'll be wrapped in explicit quote marks
         let quot = vec!["id", "full_name", "biography"];
@@ -341,26 +330,22 @@ impl Threads {
             .unwrap_or(&Value::Null);
 
         // We do this for safety, but if the request was successful, this should go smoothly.
-        if pfp_location.is_array() {
-            let pfp_versions = pfp_location.as_array().unwrap();
-
+        if let Value::Array(versions) = &pfp_location {
             // Gets the highest quality version of the profile pic
-            pfp = Some(
-                pfp_versions[pfp_versions.len() - 1]["url"]
-                    .as_str()
-                    .to_owned()
-                    .unwrap()
-                    .to_string(),
-            );
+            pfp = versions[versions.len() - 1]["url"]
+                .as_str()
+                .to_owned()
+                .unwrap()
+                .to_string();
         }
 
         // Sets name and bio values if applicable
         if !unquot[1].is_empty() {
-            name = Some(unquot[1].clone())
+            name = unquot[1].clone()
         }
 
         if !unquot[2].is_empty() {
-            bio = Some(unquot[2].clone())
+            bio = unquot[2].clone()
         }
 
         // Executes request to get additional information through the user ID
@@ -374,12 +359,10 @@ impl Threads {
             .pointer("/data/user/bio_links")
             .unwrap_or(&Value::Null);
 
-        if links_parent.is_array() {
-            let mut links_vec: Vec<String> = vec![];
-            for x in links_parent.as_array().unwrap() {
-                links_vec.push(x["url"].as_str().to_owned().unwrap().to_string())
+        if let Value::Array(link_array) = &links_parent {
+            for link in link_array {
+                links.push(link["url"].as_str().to_owned().unwrap().to_string())
             }
-            links = Some(links_vec);
         }
 
         // Executes a request to get the user's posts
@@ -392,18 +375,15 @@ impl Threads {
         let edges = post_resp
             .pointer("/data/mediaData/edges")
             .unwrap_or(&Value::Null);
-        if edges.is_array() {
-            let node_array = edges.as_array().unwrap();
-            let mut post_vec: Vec<String> = vec![];
-            for node in node_array {
+
+        if let Value::Array(nodes) = &edges {
+            for node in nodes {
                 let thread_items = node.pointer("/node/thread_items").unwrap();
+
                 for item in thread_items.as_array().unwrap() {
-                    let cur = item.pointer("/post").unwrap();
-                    let code = cur["code"].as_str().to_owned().unwrap();
-                    post_vec.push(code.to_string());
+			posts.push(self.subpost(item)?)
                 }
             }
-            posts = Some(post_vec);
         }
 
         Ok(User {
@@ -419,20 +399,21 @@ impl Threads {
     }
 
     /// Fetch post information
-    pub async fn fetch_post(&self, id: &str) -> Result<Post> {
+    pub async fn fetch_post(&self, code: &str) -> Result<Post> {
         // Since there's no endpoint for getting full IDs out of short ones, fetch it from post URL
-        let inner_id = id.to_owned();
+        let inner_code = code.to_owned();
         let cloned = self.clone();
-        let id_req = task::spawn(async move { cloned.full_id(&inner_id.as_str()).await }).await??;
+        let code_req =
+            task::spawn(async move { cloned.full_id(&inner_code.as_str()).await }).await??;
 
-        if id_req.is_none() {
+        if code_req.is_none() {
             return Err(Error::msg("not found"));
         }
 
-        let fullid = id_req.unwrap_or(String::new());
+        let id = code_req.unwrap_or(String::new());
 
         // Now we can fetch the actual post
-        let variables = format!("\"postID\":\"{}\"", &fullid);
+        let variables = format!("\"postID\":\"{}\"", &id);
         let cloned: Threads = self.clone();
         let resp = task::spawn(async move { cloned.query(&variables, "26262423843344977").await })
             .await??;
@@ -443,12 +424,12 @@ impl Threads {
             return Err(Error::msg("not a post"));
         }
 
-        // Defines values for parents and replies
-        let mut parents: Vec<Post> = vec![];
-        let mut replies: Vec<Post> = vec![];
+        // Defines initial values for parents and replies
+        let mut parents: Vec<Subpost> = vec![];
+        let mut replies: Vec<Subpost> = vec![];
 
-        // Defines values for post location
-        let mut post: Post = Default::default();
+        // Defines initial values for post location
+        let mut subpost: Subpost = Default::default();
         let mut post_found: bool = false;
 
         // Meta wrapping stuff in arrays -.-
@@ -463,10 +444,10 @@ impl Threads {
 
             for item in thread_items.as_array().unwrap() {
                 let builder = Threads::new()?;
-                let cur = builder.deserialize_post(item)?;
+                let cur = builder.subpost(item)?;
 
-                if cur.id == fullid {
-                    post = cur;
+                if cur.code == code {
+                    subpost = cur;
                     post_found = true;
                 } else if !post_found {
                     parents.push(cur);
@@ -480,8 +461,17 @@ impl Threads {
             return Err(Error::msg("unknown error"));
         }
 
-        post.parents = parents;
-        post.replies = replies;
+        let post = Post {
+            id,
+            name: subpost.name,
+            date: subpost.date,
+            body: subpost.body,
+            media: subpost.media,
+            likes: subpost.likes,
+            reposts: subpost.reposts,
+            parents,
+            replies,
+        };
 
         Ok(post)
     }
