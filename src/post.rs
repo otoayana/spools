@@ -1,4 +1,4 @@
-use crate::{media::Media, Threads};
+use crate::{media::Media, user::Author, Threads};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Post {
     pub id: String,
-    pub name: String,
+    pub author: Author,
     pub date: u64,
     pub body: String,
     pub media: Vec<Media>,
@@ -20,7 +20,7 @@ pub struct Post {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Subpost {
     pub code: String,
-    pub name: String,
+    pub author: Author,
     pub date: u64,
     pub body: String,
     pub media: Vec<Media>,
@@ -50,7 +50,7 @@ impl Post {
 
         Ok(Subpost {
             code: final_code,
-            name: self.name.to_owned(),
+            author: self.author.to_owned(),
             date: self.date,
             body: self.body.to_owned(),
             media: self.media.to_owned(),

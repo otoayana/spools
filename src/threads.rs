@@ -1,7 +1,7 @@
 use crate::{
     media::{Media, MediaKind},
     post::{Post, Subpost},
-    user::User,
+    user::{Author, User},
 };
 use anyhow::{Error, Result};
 use rand::distributions::{Alphanumeric, DistString};
@@ -148,13 +148,30 @@ impl Threads {
                 .unwrap()
                 .to_string();
 
-            // Get the post's author
-            let tag = post
-                .pointer("/user/username")
-                .unwrap()
-                .as_str()
-                .to_owned()
-                .unwrap();
+            let author = Author {
+                username: post
+                    .pointer("/user/username")
+                    .unwrap()
+                    .as_str()
+                    .to_owned()
+                    .unwrap()
+                    .to_string(),
+
+                pfp: post
+                    .pointer("/user/profile_pic_url")
+                    .unwrap()
+                    .as_str()
+                    .to_owned()
+                    .unwrap()
+                    .to_string(),
+
+                verified: post
+                    .pointer("/user/is_verified")
+                    .unwrap()
+                    .as_bool()
+                    .to_owned()
+                    .unwrap(),
+            };
 
             // Get the post's date
             let date = post
@@ -313,7 +330,7 @@ impl Threads {
 
             Ok(Subpost {
                 code,
-                name: tag.to_string(),
+                author,
                 date,
                 body,
                 media,
@@ -333,7 +350,6 @@ impl Threads {
     pub async fn fetch_user(&self, tag: &str) -> Result<User> {
         // Executes request to get user info from the username
         let variables = format!("\"username\":\"{}\"", tag);
-
         let cloned = self.clone();
 
         let resp =
@@ -443,7 +459,8 @@ impl Threads {
         // Since there's no endpoint for getting full IDs out of short ones, fetch it from post URL
         let inner_code = code.to_owned();
         let cloned = self.clone();
-        let id = task::spawn(async move { cloned.fetch_post_id(&inner_code.as_str()).await }).await??;
+        let id =
+            task::spawn(async move { cloned.fetch_post_id(&inner_code.as_str()).await }).await??;
 
         // Now we can fetch the actual post
         let variables = format!("\"postID\":\"{}\"", &id);
@@ -469,24 +486,24 @@ impl Threads {
         let node_array = check.unwrap_or(&Value::Null).as_array().unwrap();
 
         for node in node_array {
-            let thread_items = node.pointer("/node/thread_items").unwrap_or(&Value::Null);
+            if let Value::Array(thread_items) =
+                &node.pointer("/node/thread_items").unwrap_or(&Value::Null)
+            {
+                for item in thread_items {
+                    let builder = Threads::new()?;
+                    let cur = builder.subpost(&item)?;
 
-            if !thread_items.is_array() {
-                return Err(Error::msg("not a post"));
-            }
-
-            for item in thread_items.as_array().unwrap() {
-                let builder = Threads::new()?;
-                let cur = builder.subpost(item)?;
-
-                if cur.code == code {
-                    subpost = cur;
-                    post_found = true;
-                } else if !post_found {
-                    parents.push(cur);
-                } else {
-                    replies.push(cur);
+                    if cur.code == code {
+                        subpost = cur;
+                        post_found = true;
+                    } else if !post_found {
+                        parents.push(cur);
+                    } else {
+                        replies.push(cur);
+                    }
                 }
+            } else {
+                return Err(Error::msg("not a post"));
             }
         }
 
@@ -496,7 +513,7 @@ impl Threads {
 
         let post = Post {
             id,
-            name: subpost.name,
+            author: subpost.author,
             date: subpost.date,
             body: subpost.body,
             media: subpost.media,

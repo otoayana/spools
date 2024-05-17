@@ -34,7 +34,7 @@ async fn fetch_existing_post() {
     let post = resp.unwrap();
     println!("{:#?}", post);
     assert_eq!(post.id, "3351924843586423766");
-    assert_eq!(post.name, "zuck");
+    assert_eq!(post.author.username, "zuck");
 }
 
 #[tokio::test]
@@ -60,7 +60,7 @@ async fn convert_to_post() {
 
     let post = resp.unwrap();
     assert_eq!(post.id, "3358445536292748283");
-    assert_eq!(post.name, "metaquest");
+    assert_eq!(post.author.username, "metaquest");
 }
 
 #[tokio::test]
