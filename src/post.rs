@@ -3,7 +3,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 /// Post contents, metadata, media and interactions
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Post {
     pub id: String,
     pub author: Author,
@@ -17,7 +17,7 @@ pub struct Post {
 }
 
 /// Posts embedded within other objects
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Subpost {
     pub code: String,
     pub author: Author,
@@ -34,28 +34,5 @@ impl Subpost {
         let post = client.fetch_post(&self.code).await?;
 
         Ok(post)
-    }
-}
-
-impl Post {
-    pub async fn to_subpost(&self, code: Option<String>) -> Result<Subpost> {
-        let final_code: String;
-
-        if let Some(val) = code {
-            final_code = val;
-        } else {
-            let client = Threads::new()?;
-            final_code = client.fetch_post_code(&self.id).await?;
-        }
-
-        Ok(Subpost {
-            code: final_code,
-            author: self.author.to_owned(),
-            date: self.date,
-            body: self.body.to_owned(),
-            media: self.media.to_owned(),
-            likes: self.likes,
-            reposts: self.reposts,
-        })
     }
 }

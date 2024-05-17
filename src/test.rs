@@ -15,6 +15,7 @@ async fn fetch_existing_user() {
     let user = resp.unwrap();
     println!("{:#?}", user);
     assert_eq!(user.id, 314216);
+    assert_eq!(user.verified, true);
 }
 
 #[tokio::test]
@@ -64,7 +65,7 @@ async fn convert_to_post() {
 }
 
 #[tokio::test]
-async fn convert_to_subpost() {
+async fn convert_to_user() {
     let client = Threads::new().unwrap();
     let post_resp = client.fetch_post("C6brVPxR1fZ").await;
     println!("{:#?}", post_resp);
@@ -73,10 +74,11 @@ async fn convert_to_subpost() {
     let post = post_resp.unwrap();
     println!("{:#?}", post);
 
-    let resp = post.to_subpost(None).await;
+    let resp = post.author.to_user().await;
     println!("{:#?}", resp);
     assert!(resp.is_ok());
 
-    let subpost = resp.unwrap();
-    assert_eq!(subpost.code, "C6brVPxR1fZ");
+    let user = resp.unwrap();
+    assert_eq!(user.id, 314216);
+    assert_eq!(user.verified, true);
 }

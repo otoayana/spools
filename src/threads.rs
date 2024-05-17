@@ -97,48 +97,8 @@ impl Threads {
         Ok(id)
     }
 
-    /// Retrieves shortcode from post ID
-    pub async fn fetch_post_code(&self, id: &str) -> Result<String> {
-        // Now we can fetch the actual post
-        let variables = format!("\"postID\":\"{}\"", &id);
-        let cloned: Threads = self.clone();
-        let resp = task::spawn(async move { cloned.query(&variables, "26262423843344977").await })
-            .await??;
-
-        let check = resp.pointer("/data/data/edges");
-
-        if check.is_none() {
-            return Err(Error::msg("failed to fetch post"));
-        }
-
-        let mut code: String = String::new();
-
-        // Meta wrapping stuff in arrays -.-
-        let node_array = check.unwrap_or(&Value::Null).as_array().unwrap();
-
-        for node in node_array {
-            let thread_items = node.pointer("/node/thread_items").unwrap_or(&Value::Null);
-
-            if !thread_items.is_array() {
-                return Err(Error::msg("not a post"));
-            }
-
-            for item in thread_items.as_array().unwrap() {
-                let cur = item.pointer("/post").unwrap();
-                let cur_id = cur["pk"].as_str().to_owned().unwrap();
-
-                if cur_id == id {
-                    code = cur["code"].as_str().to_owned().unwrap().to_string();
-                    break;
-                }
-            }
-        }
-
-        Ok(code)
-    }
-
     /// Deserialize the JSON query for a post
-    fn subpost(&self, query: &Value) -> Result<Subpost> {
+    fn build_subpost(&self, query: &Value) -> Result<Subpost> {
         if let Some(post) = query.pointer("/post") {
             let code = post
                 .pointer("/code")
@@ -437,7 +397,7 @@ impl Threads {
                 let thread_items = node.pointer("/node/thread_items").unwrap();
 
                 for item in thread_items.as_array().unwrap() {
-                    posts.push(self.subpost(item)?)
+                    posts.push(self.build_subpost(item)?)
                 }
             }
         }
@@ -479,49 +439,49 @@ impl Threads {
         let mut replies: Vec<Subpost> = vec![];
 
         // Defines initial values for post location
-        let mut subpost: Subpost = Default::default();
-        let mut post_found: bool = false;
+        let mut subpost: Option<Subpost> = None;
 
         // Meta wrapping stuff in arrays -.-
-        let node_array = check.unwrap_or(&Value::Null).as_array().unwrap();
+        if let Value::Array(node_array) = &check.unwrap() {
+            for node in node_array {
+                if let Value::Array(thread_items) =
+                    &node.pointer("/node/thread_items").unwrap_or(&Value::Null)
+                {
+                    for item in thread_items {
+                        let builder = Threads::new()?;
+                        let cur = builder.build_subpost(&item)?;
 
-        for node in node_array {
-            if let Value::Array(thread_items) =
-                &node.pointer("/node/thread_items").unwrap_or(&Value::Null)
-            {
-                for item in thread_items {
-                    let builder = Threads::new()?;
-                    let cur = builder.subpost(&item)?;
-
-                    if cur.code == code {
-                        subpost = cur;
-                        post_found = true;
-                    } else if !post_found {
-                        parents.push(cur);
-                    } else {
-                        replies.push(cur);
+                        if cur.code == code {
+                            subpost = Some(cur);
+                        } else if subpost.is_none() {
+                            parents.push(cur);
+                        } else {
+                            replies.push(cur);
+                        }
                     }
+                } else {
+                    return Err(Error::msg("not a post"));
                 }
-            } else {
-                return Err(Error::msg("not a post"));
             }
         }
 
-        if !post_found {
-            return Err(Error::msg("unknown error"));
-        }
+        let post: Post;
 
-        let post = Post {
-            id,
-            author: subpost.author,
-            date: subpost.date,
-            body: subpost.body,
-            media: subpost.media,
-            likes: subpost.likes,
-            reposts: subpost.reposts,
-            parents,
-            replies,
-        };
+        if let Some(fields) = subpost {
+            post = Post {
+                id,
+                author: fields.author,
+                date: fields.date,
+                body: fields.body,
+                media: fields.media,
+                likes: fields.likes,
+                reposts: fields.reposts,
+                parents,
+                replies,
+            }
+        } else {
+            return Err(Error::msg("post not found"));
+        }
 
         Ok(post)
     }
