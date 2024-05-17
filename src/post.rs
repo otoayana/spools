@@ -1,5 +1,5 @@
-use crate::{media::Media, user::Author, Threads};
 use crate::error::SpoolsError;
+use crate::{media::Media, user::Author, Threads};
 use serde::{Deserialize, Serialize};
 
 /// Post contents, metadata, media and interactions
@@ -29,6 +29,7 @@ pub struct Subpost {
 }
 
 impl Subpost {
+    /// Convert a subpost into its detailed counterpart
     pub async fn to_post(&self) -> Result<Post, SpoolsError> {
         let client = Threads::new()?;
         let post = client.fetch_post(&self.code).await?;

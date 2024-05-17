@@ -23,6 +23,7 @@ pub struct Author {
 }
 
 impl Author {
+    /// Convert author into its detailed counterpart
     pub async fn to_user(&self) -> Result<User, SpoolsError> {
         let client = Threads::new()?;
         let user = client.fetch_user(&self.username).await?;
