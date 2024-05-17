@@ -66,11 +66,11 @@ impl Threads {
         Ok(deser)
     }
 
-    /// Retrieve full post ID from short ID
-    async fn full_id(&self, id: &str) -> Result<Option<String>> {
+    /// Retrieve post ID from shortcode
+    async fn fetch_post_id(&self, code: &str) -> Result<String> {
         let resp = self
             .client
-            .get(format!("https://www.threads.net/post/{}", id))
+            .get(format!("https://www.threads.net/post/{}", code))
             .header("Sec-Fetch-Node", "navigate")
             .send()
             .await?
@@ -80,7 +80,7 @@ impl Threads {
         // Finds the ID, located in a meta tag containing JSON data
         let id_location = resp.find("post_id");
         if id_location.is_none() {
-            return Ok(None);
+            return Err(Error::msg("couldn't get id"));
         }
 
         // Prepare values to select the ID
@@ -94,7 +94,47 @@ impl Threads {
             curchar = resp.as_bytes()[cur] as char;
         }
 
-        Ok(Some(id))
+        Ok(id)
+    }
+
+    /// Retrieves shortcode from post ID
+    pub async fn fetch_post_code(&self, id: &str) -> Result<String> {
+        // Now we can fetch the actual post
+        let variables = format!("\"postID\":\"{}\"", &id);
+        let cloned: Threads = self.clone();
+        let resp = task::spawn(async move { cloned.query(&variables, "26262423843344977").await })
+            .await??;
+
+        let check = resp.pointer("/data/data/edges");
+
+        if check.is_none() {
+            return Err(Error::msg("failed to fetch post"));
+        }
+
+        let mut code: String = String::new();
+
+        // Meta wrapping stuff in arrays -.-
+        let node_array = check.unwrap_or(&Value::Null).as_array().unwrap();
+
+        for node in node_array {
+            let thread_items = node.pointer("/node/thread_items").unwrap_or(&Value::Null);
+
+            if !thread_items.is_array() {
+                return Err(Error::msg("not a post"));
+            }
+
+            for item in thread_items.as_array().unwrap() {
+                let cur = item.pointer("/post").unwrap();
+                let cur_id = cur["pk"].as_str().to_owned().unwrap();
+
+                if cur_id == id {
+                    code = cur["code"].as_str().to_owned().unwrap().to_string();
+                    break;
+                }
+            }
+        }
+
+        Ok(code)
     }
 
     /// Deserialize the JSON query for a post
@@ -371,7 +411,7 @@ impl Threads {
         let post_resp =
             task::spawn(async move { cloned.query(&post_var, "7357407954367176").await }).await??;
 
-        // Gets users' posts
+        // Gets user's posts
         let edges = post_resp
             .pointer("/data/mediaData/edges")
             .unwrap_or(&Value::Null);
@@ -381,7 +421,7 @@ impl Threads {
                 let thread_items = node.pointer("/node/thread_items").unwrap();
 
                 for item in thread_items.as_array().unwrap() {
-			posts.push(self.subpost(item)?)
+                    posts.push(self.subpost(item)?)
                 }
             }
         }
@@ -403,14 +443,7 @@ impl Threads {
         // Since there's no endpoint for getting full IDs out of short ones, fetch it from post URL
         let inner_code = code.to_owned();
         let cloned = self.clone();
-        let code_req =
-            task::spawn(async move { cloned.full_id(&inner_code.as_str()).await }).await??;
-
-        if code_req.is_none() {
-            return Err(Error::msg("not found"));
-        }
-
-        let id = code_req.unwrap_or(String::new());
+        let id = task::spawn(async move { cloned.fetch_post_id(&inner_code.as_str()).await }).await??;
 
         // Now we can fetch the actual post
         let variables = format!("\"postID\":\"{}\"", &id);
