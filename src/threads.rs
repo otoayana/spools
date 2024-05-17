@@ -1,13 +1,12 @@
 use crate::{
+    error::{SpoolsError, Types},
     media::{Media, MediaKind},
     post::{Post, Subpost},
     user::{Author, User},
 };
-use anyhow::{Error, Result};
 use rand::distributions::{Alphanumeric, DistString};
 use reqwest::{header, Client};
 use serde_json::Value;
-use tokio::task;
 
 /// Threads pseudo-client
 ///
@@ -21,7 +20,7 @@ pub struct Threads {
 
 impl Threads {
     /// Create a new [`Threads`].
-    pub fn new() -> Result<Threads> {
+    pub fn new() -> Result<Threads, SpoolsError> {
         let mut headers = header::HeaderMap::new();
         headers.insert(
             "Sec-Fetch-Site",
@@ -38,12 +37,13 @@ impl Threads {
                 .user_agent(
                     "Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0",
                 )
-                .build()?,
+                .build()
+                .map_err(|_| SpoolsError::ClientError)?,
         })
     }
 
     /// Send a GraphQL query to Threads and return a JSON document
-    async fn query(&self, variables: &str, doc_id: &str) -> Result<Value> {
+    async fn query(&self, variables: &str, doc_id: &str) -> Result<Value, SpoolsError> {
         // Meta uses 11 characters, though 12 also works
         let lsd = Alphanumeric.sample_string(&mut rand::thread_rng(), 11);
 
@@ -60,27 +60,35 @@ impl Threads {
             .form(&params)
             .header("X-FB-LSD", lsd)
             .send()
-            .await?;
+            .await
+            .map_err(|x| SpoolsError::RequestError(x))?;
 
-        let deser = resp.json::<Value>().await?;
+        let deser = resp
+            .json::<Value>()
+            .await
+            .map_err(|_| SpoolsError::InvalidResponse)?;
+
         Ok(deser)
     }
 
     /// Retrieve post ID from shortcode
-    async fn fetch_post_id(&self, code: &str) -> Result<String> {
+    async fn fetch_post_id(&self, code: &str) -> Result<String, SpoolsError> {
         let resp = self
             .client
             .get(format!("https://www.threads.net/post/{}", code))
             .header("Sec-Fetch-Node", "navigate")
             .send()
-            .await?
+            .await
+            .map_err(|x| SpoolsError::RequestError(x))?
             .text()
-            .await?;
+            .await
+            .map_err(|_| SpoolsError::InvalidResponse)?;
 
         // Finds the ID, located in a meta tag containing JSON data
         let id_location = resp.find("post_id");
-        if id_location.is_none() {
-            return Err(Error::msg("couldn't get id"));
+
+        if let None = id_location {
+            return Err(SpoolsError::NotFound(Types::Post));
         }
 
         // Prepare values to select the ID
@@ -98,7 +106,7 @@ impl Threads {
     }
 
     /// Deserialize the JSON query for a post
-    fn build_subpost(&self, query: &Value) -> Result<Subpost> {
+    fn build_subpost(&self, query: &Value) -> Result<Subpost, SpoolsError> {
         if let Some(post) = query.pointer("/post") {
             let code = post
                 .pointer("/code")
@@ -150,7 +158,7 @@ impl Threads {
                 if let Value::String(string) = maybe_body {
                     body = string.as_str().to_owned().to_string();
                 } else {
-                    return Err(Error::msg("invalid request"));
+                    return Err(SpoolsError::InvalidResponse);
                 }
             } else {
                 body = String::new();
@@ -236,7 +244,7 @@ impl Threads {
                 && image_location.as_array().unwrap_or(&vec![]).len() != 0
             {
                 // Singular media
-                // Initial values
+                // Set initial values
                 let mut kind = MediaKind::Image;
                 let content: String;
                 let mut alt: Option<String> = None;
@@ -245,7 +253,7 @@ impl Threads {
                 // Gets the first image in URL, since it's in the highest quality
                 let image_array = image_location.as_array().unwrap();
 
-                let image_url = image_array[0]["url"]
+                let image = image_array[0]["url"]
                     .as_str()
                     .to_owned()
                     .unwrap()
@@ -261,8 +269,6 @@ impl Threads {
                             .to_string(),
                     );
                 }
-
-                let image = image_url.clone();
 
                 // Video
                 if video_location.is_array() {
@@ -302,27 +308,25 @@ impl Threads {
                     .unwrap_or(0),
             })
         } else {
-            Err(Error::msg("not a post"))
+            Err(SpoolsError::InvalidResponse)
         }
     }
 
     /// Fetch user information
-    pub async fn fetch_user(&self, tag: &str) -> Result<User> {
+    pub async fn fetch_user(&self, tag: &str) -> Result<User, SpoolsError> {
         // Executes request to get user info from the username
         let variables = format!("\"username\":\"{}\"", tag);
         let cloned = self.clone();
 
-        let resp =
-            task::spawn(async move { cloned.clone().query(&variables, "7394812507255098").await })
-                .await??;
+        let resp = cloned.query(&variables, "7394812507255098").await?;
 
         // Gets tree location for value
         let parent = resp
             .pointer("/data/xdt_user_by_username")
             .unwrap_or(&Value::Null);
 
-        if parent.is_null() {
-            return Err(Error::msg("not found"));
+        if let Value::Null = parent {
+            return Err(SpoolsError::NotFound(Types::User));
         }
 
         // Defines empty values
@@ -367,8 +371,7 @@ impl Threads {
         // Executes request to get additional information through the user ID
         let cloned = self.clone();
         let id_var = format!("\"userID\":\"{}\"", unquot[0]);
-        let id_resp =
-            task::spawn(async move { cloned.query(&id_var, "25253062544340717").await }).await??;
+        let id_resp = cloned.query(&id_var, "25253062544340717").await?;
 
         // Gets user's bio links
         let links_parent = id_resp
@@ -384,8 +387,7 @@ impl Threads {
         // Executes a request to get the user's posts
         let cloned: Threads = self.clone();
         let post_var = format!("\"userID\":\"{}\"", unquot[0]);
-        let post_resp =
-            task::spawn(async move { cloned.query(&post_var, "7357407954367176").await }).await??;
+        let post_resp = cloned.query(&post_var, "7357407954367176").await?;
 
         // Gets user's posts
         let edges = post_resp
@@ -403,7 +405,9 @@ impl Threads {
         }
 
         Ok(User {
-            id: unquot[0].parse::<u64>()?,
+            id: unquot[0]
+                .parse::<u64>()
+                .map_err(|_| SpoolsError::InvalidResponse)?,
             name,
             pfp,
             bio,
@@ -415,72 +419,71 @@ impl Threads {
     }
 
     /// Fetch post information
-    pub async fn fetch_post(&self, code: &str) -> Result<Post> {
+    pub async fn fetch_post(&self, code: &str) -> Result<Post, SpoolsError> {
         // Since there's no endpoint for getting full IDs out of short ones, fetch it from post URL
         let inner_code = code.to_owned();
         let cloned = self.clone();
-        let id =
-            task::spawn(async move { cloned.fetch_post_id(&inner_code.as_str()).await }).await??;
+        let id = cloned.fetch_post_id(&inner_code.as_str()).await?;
 
         // Now we can fetch the actual post
         let variables = format!("\"postID\":\"{}\"", &id);
         let cloned: Threads = self.clone();
-        let resp = task::spawn(async move { cloned.query(&variables, "26262423843344977").await })
-            .await??;
+        let resp = cloned.query(&variables, "26262423843344977").await?;
 
         let check = resp.pointer("/data/data/edges");
-
-        if check.is_none() {
-            return Err(Error::msg("not a post"));
-        }
-
-        // Defines initial values for parents and replies
-        let mut parents: Vec<Subpost> = vec![];
-        let mut replies: Vec<Subpost> = vec![];
-
-        // Defines initial values for post location
-        let mut subpost: Option<Subpost> = None;
-
-        // Meta wrapping stuff in arrays -.-
-        if let Value::Array(node_array) = &check.unwrap() {
-            for node in node_array {
-                if let Value::Array(thread_items) =
-                    &node.pointer("/node/thread_items").unwrap_or(&Value::Null)
-                {
-                    for item in thread_items {
-                        let builder = Threads::new()?;
-                        let cur = builder.build_subpost(&item)?;
-
-                        if cur.code == code {
-                            subpost = Some(cur);
-                        } else if subpost.is_none() {
-                            parents.push(cur);
-                        } else {
-                            replies.push(cur);
-                        }
-                    }
-                } else {
-                    return Err(Error::msg("not a post"));
-                }
-            }
-        }
-
         let post: Post;
 
-        if let Some(fields) = subpost {
-            post = Post {
-                id,
-                author: fields.author,
-                date: fields.date,
-                body: fields.body,
-                media: fields.media,
-                likes: fields.likes,
-                reposts: fields.reposts,
-                parents,
-                replies,
+        if let Some(content) = check {
+            // Defines initial values for parents and replies
+            let mut parents: Vec<Subpost> = vec![];
+            let mut replies: Vec<Subpost> = vec![];
+
+            // Defines initial values for post location
+            let mut subpost: Option<Subpost> = None;
+
+            // Meta wrapping stuff in arrays -.-
+            if let Value::Array(node_array) = content {
+                for node in node_array {
+                    if let Value::Array(thread_items) =
+                        &node.pointer("/node/thread_items").unwrap_or(&Value::Null)
+                    {
+                        for item in thread_items {
+                            let builder = Threads::new()?;
+                            let cur = builder
+                                .build_subpost(&item)
+                                .map_err(|_| SpoolsError::SubpostError)?;
+
+                            if cur.code == code {
+                                subpost = Some(cur);
+                            } else if subpost.is_none() {
+                                parents.push(cur);
+                            } else {
+                                replies.push(cur);
+                            }
+                        }
+                    }
+                }
+
+                if let Some(fields) = subpost {
+                    post = Post {
+                        id,
+                        author: fields.author,
+                        date: fields.date,
+                        body: fields.body,
+                        media: fields.media,
+                        likes: fields.likes,
+                        reposts: fields.reposts,
+                        parents,
+                        replies,
+                    }
+                } else {
+                    return Err(SpoolsError::NotFound(Types::Post));
+                }
+            } else {
+                return Err(SpoolsError::NotFound(Types::Post));
             }
         } else {
-            return Err(Error::msg("post not found"));
+            return Err(SpoolsError::NotFound(Types::Post));
         }
 
         Ok(post)

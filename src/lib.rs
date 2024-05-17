@@ -9,23 +9,24 @@
 //!
 //! ```rust
 //! # use spools;
-//! # use anyhow::Result;
 //! #
-//! # async fn run() -> Result<()> {
+//! # async fn run() -> Result<(), spools::SpoolsError> {
 //! let client = spools::Threads::new()?;
 //! let user = client.fetch_user("zuck").await?;
 //! let post = client.fetch_post(&user.posts[0].code).await?;
 //! #     Ok(())
 //! # }
+mod error;
 mod media;
 mod post;
 mod threads;
 mod user;
 
+pub use error::SpoolsError;
 pub use media::{Media, MediaKind};
-pub use post::Post;
+pub use post::{Post, Subpost};
 pub use threads::Threads;
-pub use user::User;
+pub use user::{Author, User};
 
 #[cfg(test)]
 mod test;

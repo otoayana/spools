@@ -1,5 +1,4 @@
-use crate::{post::Subpost, Threads};
-use anyhow::Result;
+use crate::{error::SpoolsError, post::Subpost, Threads};
 use serde::{Deserialize, Serialize};
 
 /// User information and statistics
@@ -15,6 +14,7 @@ pub struct User {
     pub posts: Vec<Subpost>,
 }
 
+/// User embedded within object
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Author {
     pub username: String,
@@ -23,7 +23,7 @@ pub struct Author {
 }
 
 impl Author {
-    pub async fn to_user(&self) -> Result<User> {
+    pub async fn to_user(&self) -> Result<User, SpoolsError> {
         let client = Threads::new()?;
         let user = client.fetch_user(&self.username).await?;
 
