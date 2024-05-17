@@ -301,11 +301,7 @@ impl Threads {
                 body,
                 media,
                 likes: post["like_count"].as_u64().unwrap_or(0),
-                reposts: post
-                    .pointer("/text_post_app_info/repost_count")
-                    .unwrap()
-                    .as_u64()
-                    .unwrap_or(0),
+                reposts: post["repost_count"].as_u64().unwrap_or(0),
             })
         } else {
             Err(SpoolsError::InvalidResponse)
