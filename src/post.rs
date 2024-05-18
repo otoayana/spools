@@ -11,7 +11,6 @@ pub struct Post {
     pub body: String,
     pub media: Vec<Media>,
     pub likes: u64,
-    pub reposts: u64,
     pub parents: Vec<Subpost>,
     pub replies: Vec<Subpost>,
 }
@@ -25,7 +24,6 @@ pub struct Subpost {
     pub body: String,
     pub media: Vec<Media>,
     pub likes: u64,
-    pub reposts: u64,
 }
 
 impl Subpost {

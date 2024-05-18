@@ -301,7 +301,6 @@ impl Threads {
                 body,
                 media,
                 likes: post["like_count"].as_u64().unwrap_or(0),
-                reposts: post["repost_count"].as_u64().unwrap_or(0),
             })
         } else {
             Err(SpoolsError::InvalidResponse)
@@ -480,7 +479,6 @@ impl Threads {
                         body: fields.body,
                         media: fields.media,
                         likes: fields.likes,
-                        reposts: fields.reposts,
                         parents,
                         replies,
                     }
