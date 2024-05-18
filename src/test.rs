@@ -1,4 +1,4 @@
-use crate::Threads;
+use crate::{Author, Threads};
 
 #[tokio::test]
 async fn new_client() {
@@ -28,14 +28,23 @@ async fn fetch_nonexistent_user() {
 #[tokio::test]
 async fn fetch_existing_post() {
     let client = Threads::new().unwrap();
-    let resp = client.fetch_post("C6EbeLPxovW").await;
+    let resp = client.fetch_post("C2QBoRaRmR1").await;
     println!("{:#?}", resp);
     assert!(resp.is_ok());
 
     let post = resp.unwrap();
     println!("{:#?}", post);
-    assert_eq!(post.id, "3351924843586423766");
+    assert_eq!(post.id, "3283131293873103989");
     assert_eq!(post.author.username, "zuck");
+
+    let mut reply_scan: Vec<Author> = vec![];
+    for reply in post.replies {
+        if reply.author.username == "zuck" {
+            reply_scan.push(reply.author);
+        }
+    }
+
+    assert!(reply_scan.len() > 0);
 }
 
 #[tokio::test]

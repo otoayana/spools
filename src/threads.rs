@@ -451,10 +451,22 @@ impl Threads {
 
                             if cur.code == code {
                                 subpost = Some(cur);
-                            } else if subpost.is_none() {
-                                parents.push(cur);
                             } else {
-                                replies.push(cur);
+                                if let Some(post) = &subpost {
+                                    let username_req = &item
+                                        .pointer(
+                                            "/post/text_post_app_info/reply_to_author/username",
+                                        )
+                                        .unwrap_or(&Value::Null);
+
+                                    if let Some(name) = username_req.as_str().to_owned() {
+                                        if name == post.author.username {
+                                            replies.push(cur);
+                                        }
+                                    }
+                                } else {
+                                    parents.push(cur);
+                                }
                             }
                         }
                     }
