@@ -6,7 +6,7 @@ spools is a content scraping library for Instagram's [Threads](https://threads.n
 spools aims to provide a more comfortable interface than Threads' cumbersome and obfuscated
 internal API, with the added bonus of not requiring an account.
 
-spools is co-developed alongside [Shoelace](https://sr.ht/~nixgoat/shoelace), a private frontend
+spools is co-developed alongside [Shoelace](https://sr.ht/~nixgoat/shoelace), an alternative frontend
 for Threads.
 
 ## Contributing
