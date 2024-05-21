@@ -61,7 +61,7 @@ impl Threads {
             .header("X-FB-LSD", lsd)
             .send()
             .await
-            .map_err(|x| SpoolsError::RequestError(x))?;
+            .map_err(SpoolsError::RequestError)?;
 
         let deser = resp
             .json::<Value>()
@@ -79,7 +79,7 @@ impl Threads {
             .header("Sec-Fetch-Node", "navigate")
             .send()
             .await
-            .map_err(|x| SpoolsError::RequestError(x))?
+            .map_err(SpoolsError::RequestError)?
             .text()
             .await
             .map_err(|_| SpoolsError::InvalidResponse)?;
@@ -87,7 +87,7 @@ impl Threads {
         // Finds the ID, located in a meta tag containing JSON data
         let id_location = resp.find("post_id");
 
-        if let None = id_location {
+        if id_location.is_none() {
             return Err(SpoolsError::NotFound(Types::Post));
         }
 
@@ -241,7 +241,7 @@ impl Threads {
                     });
                 }
             } else if image_location.is_array()
-                && image_location.as_array().unwrap_or(&vec![]).len() != 0
+                && !image_location.as_array().unwrap_or(&vec![]).is_empty()
             {
                 // Singular media
                 // Set initial values
@@ -356,11 +356,11 @@ impl Threads {
 
         // Sets name and bio values if applicable
         if !unquot[1].is_empty() {
-            name = unquot[1].clone()
+            name.clone_from(&unquot[1])
         }
 
         if !unquot[2].is_empty() {
-            bio = unquot[2].clone()
+            bio.clone_from(&unquot[2])
         }
 
         // Executes request to get additional information through the user ID
@@ -418,7 +418,7 @@ impl Threads {
         // Since there's no endpoint for getting full IDs out of short ones, fetch it from post URL
         let inner_code = code.to_owned();
         let cloned = self.clone();
-        let id = cloned.fetch_post_id(&inner_code.as_str()).await?;
+        let id = cloned.fetch_post_id(inner_code.as_str()).await?;
 
         // Now we can fetch the actual post
         let variables = format!("\"postID\":\"{}\"", &id);
@@ -445,27 +445,23 @@ impl Threads {
                         for item in thread_items {
                             let builder = Threads::new()?;
                             let cur = builder
-                                .build_subpost(&item)
+                                .build_subpost(item)
                                 .map_err(|_| SpoolsError::SubpostError)?;
 
                             if cur.code == code {
                                 subpost = Some(cur);
-                            } else {
-                                if let Some(post) = &subpost {
-                                    let username_req = &item
-                                        .pointer(
-                                            "/post/text_post_app_info/reply_to_author/username",
-                                        )
-                                        .unwrap_or(&Value::Null);
+                            } else if let Some(post) = &subpost {
+                                let username_req = &item
+                                    .pointer("/post/text_post_app_info/reply_to_author/username")
+                                    .unwrap_or(&Value::Null);
 
-                                    if let Some(name) = username_req.as_str().to_owned() {
-                                        if name == post.author.username {
-                                            replies.push(cur);
-                                        }
+                                if let Some(name) = username_req.as_str().to_owned() {
+                                    if name == post.author.username {
+                                        replies.push(cur);
                                     }
-                                } else {
-                                    parents.push(cur);
                                 }
+                            } else {
+                                parents.push(cur);
                             }
                         }
                     }
