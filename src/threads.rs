@@ -179,67 +179,72 @@ impl Threads {
             // Check where media could be, if there is any
             if carousel_location.is_array() {
                 // Carousel media
-                let carousel_array = carousel_location.as_array().unwrap();
-                for node in carousel_array {
-                    // Initial values
-                    let mut kind = MediaKind::Image;
-                    let content: String;
-                    let mut alt: Option<String> = None;
-                    let mut thumbnail: Option<String> = None;
+                media = carousel_location
+                    .as_array()
+                    .unwrap()
+                    .clone()
+                    .iter_mut()
+                    .map(|node| {
+                        // Initial values
+                        let mut kind = MediaKind::Image;
+                        let content: String;
+                        let mut alt: Option<String> = None;
+                        let mut thumbnail: Option<String> = None;
 
-                    // Image
-                    let node_image_location = &node
-                        .pointer("/image_versions2/candidates")
-                        .unwrap()
-                        .as_array()
-                        .unwrap()[0];
-                    let node_video_location =
-                        node.pointer("/video_versions").unwrap_or(&Value::Null);
+                        // Image
+                        let node_image_location = &node
+                            .pointer("/image_versions2/candidates")
+                            .unwrap()
+                            .as_array()
+                            .unwrap()[0];
+                        let node_video_location =
+                            node.pointer("/video_versions").unwrap_or(&Value::Null);
 
-                    // CDN URL
-                    let image_url = node_image_location["url"]
-                        .as_str()
-                        .to_owned()
-                        .unwrap()
-                        .to_string();
-
-                    // Alt text
-                    if !node["accessibility_caption"].is_null() {
-                        alt = Some(
-                            node["accessibility_caption"]
-                                .as_str()
-                                .to_owned()
-                                .unwrap()
-                                .to_string(),
-                        );
-                    }
-
-                    let image = image_url.clone();
-
-                    // Video
-                    if node_video_location.is_array() {
-                        let video_array = node_video_location.as_array().unwrap();
-
-                        let video = video_array[0]["url"]
+                        // CDN URL
+                        let image_url = node_image_location["url"]
                             .as_str()
                             .to_owned()
                             .unwrap()
                             .to_string();
 
-                        kind = MediaKind::Video;
-                        content = video;
-                        thumbnail = Some(image);
-                    } else {
-                        content = image;
-                    }
+                        // Alt text
+                        if !node["accessibility_caption"].is_null() {
+                            alt = Some(
+                                node["accessibility_caption"]
+                                    .as_str()
+                                    .to_owned()
+                                    .unwrap()
+                                    .to_string(),
+                            );
+                        }
 
-                    media.push(Media {
-                        kind,
-                        alt,
-                        content,
-                        thumbnail,
-                    });
-                }
+                        let image = image_url.clone();
+
+                        // Video
+                        if node_video_location.is_array() {
+                            let video_array = node_video_location.as_array().unwrap();
+
+                            let video = video_array[0]["url"]
+                                .as_str()
+                                .to_owned()
+                                .unwrap()
+                                .to_string();
+
+                            kind = MediaKind::Video;
+                            content = video;
+                            thumbnail = Some(image);
+                        } else {
+                            content = image;
+                        }
+
+                        Media {
+                            kind,
+                            alt,
+                            content,
+                            thumbnail,
+                        }
+                    })
+                    .collect();
             } else if image_location.is_array()
                 && !image_location.as_array().unwrap_or(&vec![]).is_empty()
             {
@@ -332,12 +337,10 @@ impl Threads {
         let mut posts: Vec<Subpost> = vec![];
 
         // These variables need to be fetched as str, otherwise they'll be wrapped in explicit quote marks
-        let quot = vec!["id", "full_name", "biography"];
-        let mut unquot: Vec<String> = vec![];
-
-        for val in quot {
-            unquot.push(parent[val].as_str().to_owned().unwrap().to_string())
-        }
+        let unquot: Vec<String> = vec!["id", "full_name", "biography"]
+            .into_iter()
+            .map(|var| parent[var].as_str().to_owned().unwrap().to_string())
+            .collect();
 
         // Fetches profile picture
         let pfp_location = parent
@@ -374,9 +377,10 @@ impl Threads {
             .unwrap_or(&Value::Null);
 
         if let Value::Array(link_array) = &links_parent {
-            for link in link_array {
-                links.push(link["url"].as_str().to_owned().unwrap().to_string())
-            }
+            links = link_array
+                .iter()
+                .map(|link| link["url"].as_str().to_owned().unwrap().to_string())
+                .collect()
         }
 
         // Executes a request to get the user's posts
@@ -390,14 +394,16 @@ impl Threads {
             .unwrap_or(&Value::Null);
 
         if let Value::Array(nodes) = &edges {
-            for node in nodes {
+            nodes.iter().for_each(|node| {
                 let thread_items = node.pointer("/node/thread_items").unwrap();
 
-                for item in thread_items.as_array().unwrap() {
-                    posts.push(self.build_subpost(item)?)
-                }
-            }
-        }
+                thread_items
+                    .as_array()
+                    .unwrap()
+                    .into_iter()
+                    .for_each(|bit| posts.push(self.build_subpost(bit).unwrap()))
+            })
+        };
 
         Ok(User {
             id: unquot[0]
@@ -438,15 +444,16 @@ impl Threads {
 
             // Meta wrapping stuff in arrays -.-
             if let Value::Array(node_array) = content {
-                for node in node_array {
+                node_array.iter().for_each(|node| {
                     if let Value::Array(thread_items) =
                         &node.pointer("/node/thread_items").unwrap_or(&Value::Null)
                     {
-                        for item in thread_items {
-                            let builder = Threads::new()?;
+                        thread_items.iter().for_each(|item| {
+                            let builder = Threads::new().unwrap();
                             let cur = builder
                                 .build_subpost(item)
-                                .map_err(|_| SpoolsError::SubpostError)?;
+                                .map_err(|_| SpoolsError::SubpostError)
+                                .unwrap();
 
                             if cur.code == code {
                                 subpost = Some(cur);
@@ -463,9 +470,9 @@ impl Threads {
                             } else {
                                 parents.push(cur);
                             }
-                        }
+                        });
                     }
-                }
+                });
 
                 if let Some(fields) = subpost {
                     post = Post {
