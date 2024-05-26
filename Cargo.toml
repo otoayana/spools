@@ -1,6 +1,6 @@
 [package]
 name = "spools"
-version = "0.5.1"
+version = "0.6.0-alpha"
 edition = "2021"
 authors = ["Lux Aliaga <lux@nixgoat.me>", "aoife cassidy <aoife@enby.space>"]
 description = "Content scraping library for Instagram's Threads"

@@ -864,7 +864,7 @@ dependencies = [
 
 [[package]]
 name = "spools"
-version = "0.5.1"
+version = "0.6.0-alpha"
 dependencies = [
  "rand",
  "reqwest",
