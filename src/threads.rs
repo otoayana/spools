@@ -1,10 +1,11 @@
+use std::iter::repeat_with;
+
 use crate::{
     error::{SpoolsError, Types},
-    media::{Media, MediaKind},
+    media::Media,
     post::{Post, Subpost},
     user::{Author, User},
 };
-use rand::distributions::{Alphanumeric, DistString};
 use reqwest::{header, Client};
 use serde_json::Value;
 
@@ -45,7 +46,7 @@ impl Threads {
     /// Send a GraphQL query to Threads and return a JSON document
     async fn query(&self, variables: &str, doc_id: &str) -> Result<Value, SpoolsError> {
         // Meta uses 11 characters, though 12 also works
-        let lsd = Alphanumeric.sample_string(&mut rand::thread_rng(), 11);
+        let lsd: String = repeat_with(fastrand::alphanumeric).take(11).collect();
 
         let params = [
             ("lsd", lsd.as_str()),
@@ -164,13 +165,10 @@ impl Threads {
                 body = String::new();
             }
 
-            // Locations for singular media
-            let video_location = post.pointer("/video_versions").unwrap_or(&Value::Null);
+            // Checks for array types
             let image_location = post
                 .pointer("/image_versions2/candidates")
                 .unwrap_or(&Value::Null);
-
-            // Locations for carousel media
             let carousel_location = post.pointer("/carousel_media").unwrap_or(&Value::Null);
 
             // Define media variables
@@ -184,119 +182,14 @@ impl Threads {
                     .unwrap()
                     .clone()
                     .iter_mut()
-                    .map(|node| {
-                        // Initial values
-                        let mut kind = MediaKind::Image;
-                        let content: String;
-                        let mut alt: Option<String> = None;
-                        let mut thumbnail: Option<String> = None;
-
-                        // Image
-                        let node_image_location = &node
-                            .pointer("/image_versions2/candidates")
-                            .unwrap()
-                            .as_array()
-                            .unwrap()[0];
-                        let node_video_location =
-                            node.pointer("/video_versions").unwrap_or(&Value::Null);
-
-                        // CDN URL
-                        let image_url = node_image_location["url"]
-                            .as_str()
-                            .to_owned()
-                            .unwrap()
-                            .to_string();
-
-                        // Alt text
-                        if !node["accessibility_caption"].is_null() {
-                            alt = Some(
-                                node["accessibility_caption"]
-                                    .as_str()
-                                    .to_owned()
-                                    .unwrap()
-                                    .to_string(),
-                            );
-                        }
-
-                        let image = image_url.clone();
-
-                        // Video
-                        if node_video_location.is_array() {
-                            let video_array = node_video_location.as_array().unwrap();
-
-                            let video = video_array[0]["url"]
-                                .as_str()
-                                .to_owned()
-                                .unwrap()
-                                .to_string();
-
-                            kind = MediaKind::Video;
-                            content = video;
-                            thumbnail = Some(image);
-                        } else {
-                            content = image;
-                        }
-
-                        Media {
-                            kind,
-                            alt,
-                            content,
-                            thumbnail,
-                        }
-                    })
+                    .map(|node| Media::from(node.clone()).unwrap())
                     .collect();
             } else if image_location.is_array()
                 && !image_location.as_array().unwrap_or(&vec![]).is_empty()
             {
                 // Singular media
-                // Set initial values
-                let mut kind = MediaKind::Image;
-                let content: String;
-                let mut alt: Option<String> = None;
-                let mut thumbnail: Option<String> = None;
 
-                // Gets the first image in URL, since it's in the highest quality
-                let image_array = image_location.as_array().unwrap();
-
-                let image = image_array[0]["url"]
-                    .as_str()
-                    .to_owned()
-                    .unwrap()
-                    .to_string();
-
-                // Alt text
-                if post["accessibility_caption"].is_string() {
-                    alt = Some(
-                        post["accessibility_caption"]
-                            .as_str()
-                            .to_owned()
-                            .unwrap()
-                            .to_string(),
-                    );
-                }
-
-                // Video
-                if video_location.is_array() {
-                    let video_array = video_location.as_array().unwrap();
-                    let video = video_array[0]["url"]
-                        .as_str()
-                        .to_owned()
-                        .unwrap()
-                        .to_string();
-
-                    kind = MediaKind::Video;
-                    content = video;
-                    thumbnail = Some(image);
-                } else {
-                    content = image;
-                }
-
-                media.push(Media {
-                    kind,
-                    alt,
-                    content,
-                    thumbnail,
-                })
+                media.push(Media::from(post.clone())?)
             }
 
             Ok(Subpost {
@@ -334,11 +227,10 @@ impl Threads {
         let mut pfp: String = String::new();
         let mut bio: String = String::new();
         let mut links: Vec<String> = vec![];
-        let mut posts: Vec<Subpost> = vec![];
 
         // These variables need to be fetched as str, otherwise they'll be wrapped in explicit quote marks
         let unquot: Vec<String> = vec!["id", "full_name", "biography"]
-            .into_iter()
+            .iter()
             .map(|var| parent[var].as_str().to_owned().unwrap().to_string())
             .collect();
 
@@ -367,7 +259,6 @@ impl Threads {
         }
 
         // Executes request to get additional information through the user ID
-        let cloned = self.clone();
         let id_var = format!("\"userID\":\"{}\"", unquot[0]);
         let id_resp = cloned.query(&id_var, "25253062544340717").await?;
 
@@ -393,16 +284,22 @@ impl Threads {
             .pointer("/data/mediaData/edges")
             .unwrap_or(&Value::Null);
 
-        if let Value::Array(nodes) = &edges {
-            nodes.iter().for_each(|node| {
-                let thread_items = node.pointer("/node/thread_items").unwrap();
+        let posts: Vec<Subpost> = if let Value::Array(nodes) = &edges {
+            nodes
+                .iter()
+                .map(|node| {
+                    let thread_items = node.pointer("/node/thread_items").unwrap();
 
-                thread_items
-                    .as_array()
-                    .unwrap()
-                    .into_iter()
-                    .for_each(|bit| posts.push(self.build_subpost(bit).unwrap()))
-            })
+                    thread_items
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|bit| self.build_subpost(bit).unwrap())
+                })
+                .flatten()
+                .collect()
+        } else {
+            vec![]
         };
 
         Ok(User {
@@ -428,60 +325,77 @@ impl Threads {
 
         // Now we can fetch the actual post
         let variables = format!("\"postID\":\"{}\"", &id);
-        let cloned: Threads = self.clone();
         let resp = cloned.query(&variables, "26262423843344977").await?;
 
         let check = resp.pointer("/data/data/edges");
         let post: Post;
 
         if let Some(content) = check {
-            // Defines initial values for parents and replies
-            let mut parents: Vec<Subpost> = vec![];
-            let mut replies: Vec<Subpost> = vec![];
-
-            // Defines initial values for post location
-            let mut subpost: Option<Subpost> = None;
-
             // Meta wrapping stuff in arrays -.-
             if let Value::Array(node_array) = content {
-                node_array.iter().for_each(|node| {
-                    if let Value::Array(thread_items) =
-                        &node.pointer("/node/thread_items").unwrap_or(&Value::Null)
-                    {
-                        thread_items.iter().for_each(|item| {
-                            let builder = Threads::new().unwrap();
-                            let cur = builder
-                                .build_subpost(item)
-                                .map_err(|_| SpoolsError::SubpostError)
-                                .unwrap();
+                let subposts: Vec<(Subpost, String)> = node_array
+                    .clone()
+                    .iter_mut()
+                    .map(|node| {
+                        if let Value::Array(thread_items) =
+                            &node.pointer("/node/thread_items").unwrap_or(&Value::Null)
+                        {
+                            thread_items
+                                .to_owned()
+                                .iter()
+                                .map(|post| {
+                                    let builder = Threads::new().unwrap();
 
-                            if cur.code == code {
-                                subpost = Some(cur);
-                            } else if let Some(post) = &subpost {
-                                let username_req = &item
-                                    .pointer("/post/text_post_app_info/reply_to_author/username")
-                                    .unwrap_or(&Value::Null);
+                                    let result = builder
+                                        .build_subpost(&post)
+                                        .map_err(|_| SpoolsError::SubpostError)
+                                        .unwrap();
 
-                                if let Some(name) = username_req.as_str().to_owned() {
-                                    if name == post.author.username {
-                                        replies.push(cur);
-                                    }
-                                }
-                            } else {
-                                parents.push(cur);
-                            }
-                        });
-                    }
-                });
+                                    let rel = post
+                                        .pointer(
+                                            "/post/text_post_app_info/reply_to_author/username",
+                                        )
+                                        .unwrap_or(&Value::Null)
+                                        .as_str()
+                                        .unwrap_or("")
+                                        .to_string();
 
-                if let Some(fields) = subpost {
+                                    (result, rel)
+                                })
+                                .collect::<Vec<(Subpost, String)>>()
+                        } else {
+                            vec![]
+                        }
+                    })
+                    .flatten()
+                    .collect();
+
+                if let Some(out) = subposts.iter().filter(|post| post.0.code == code).next() {
+                    let slices: Vec<_> = subposts
+                        .split(|out| &out.0.code == code)
+                        .collect::<Vec<&[(Subpost, String)]>>();
+
+                    let parents = match slices.iter().next() {
+                        Some(val) => val.iter().map(|post| post.clone().0).collect(),
+                        None => vec![],
+                    };
+
+                    let replies = match slices.iter().last() {
+                        Some(val) => val
+                            .iter()
+                            .filter(|val| val.1 == out.0.author.username)
+                            .map(|post| post.clone().0)
+                            .collect(),
+                        None => vec![],
+                    };
+
                     post = Post {
                         id,
-                        author: fields.author,
-                        date: fields.date,
-                        body: fields.body,
-                        media: fields.media,
-                        likes: fields.likes,
+                        author: out.0.author.to_owned(),
+                        date: out.0.date,
+                        body: out.0.body.to_owned(),
+                        media: out.0.media.to_owned(),
+                        likes: out.0.likes.to_owned(),
                         parents,
                         replies,
                     }
