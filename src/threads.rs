@@ -219,7 +219,13 @@ impl Threads {
             .unwrap_or(&Value::Null);
 
         if let Value::Null = parent {
-            return Err(SpoolsError::NotFound(Types::User));
+            let error = SpoolsError::deserialize_error(resp);
+
+            return Err(if matches!(error, SpoolsError::InvalidResponse) {
+                SpoolsError::NotFound(Types::User)
+            } else {
+                error
+            });
         }
 
         // Defines empty values
@@ -403,12 +409,11 @@ impl Threads {
                     return Err(SpoolsError::NotFound(Types::Post));
                 }
             } else {
-                return Err(SpoolsError::NotFound(Types::Post));
+                return Err(SpoolsError::InvalidResponse);
             }
         } else {
-            return Err(SpoolsError::NotFound(Types::Post));
+            return Err(SpoolsError::deserialize_error(resp));
         }
-
         Ok(post)
     }
 }
