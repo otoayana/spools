@@ -336,84 +336,79 @@ impl Threads {
         let check = resp.pointer("/data/data/edges");
         let post: Post;
 
-        if let Some(content) = check {
+        if let Some(Value::Array(content)) = check {
             // Meta wrapping stuff in arrays -.-
-            if let Value::Array(node_array) = content {
-                let subposts: Vec<(Subpost, String)> = node_array
-                    .clone()
-                    .iter_mut()
-                    .map(|node| {
-                        if let Value::Array(thread_items) =
-                            &node.pointer("/node/thread_items").unwrap_or(&Value::Null)
-                        {
-                            thread_items
-                                .to_owned()
-                                .iter()
-                                .map(|post| {
-                                    let builder = Threads::new().unwrap();
-
-                                    let result = builder
-                                        .build_subpost(&post)
-                                        .map_err(|_| SpoolsError::SubpostError)
-                                        .unwrap();
-
-                                    let rel = post
-                                        .pointer(
-                                            "/post/text_post_app_info/reply_to_author/username",
-                                        )
-                                        .unwrap_or(&Value::Null)
-                                        .as_str()
-                                        .unwrap_or("")
-                                        .to_string();
-
-                                    (result, rel)
-                                })
-                                .collect::<Vec<(Subpost, String)>>()
-                        } else {
-                            vec![]
-                        }
-                    })
-                    .flatten()
-                    .collect();
-
-                if let Some(out) = subposts.iter().filter(|post| post.0.code == code).next() {
-                    let slices: Vec<_> = subposts
-                        .split(|out| &out.0.code == code)
-                        .collect::<Vec<&[(Subpost, String)]>>();
-
-                    let parents = match slices.iter().next() {
-                        Some(val) => val.iter().map(|post| post.clone().0).collect(),
-                        None => vec![],
-                    };
-
-                    let replies = match slices.iter().last() {
-                        Some(val) => val
+            let subposts: Vec<(Subpost, String)> = content
+                .clone()
+                .iter_mut()
+                .map(|node| {
+                    if let Value::Array(thread_items) =
+                        &node.pointer("/node/thread_items").unwrap_or(&Value::Null)
+                    {
+                        thread_items
+                            .to_owned()
                             .iter()
-                            .filter(|val| val.1 == out.0.author.username)
-                            .map(|post| post.clone().0)
-                            .collect(),
-                        None => vec![],
-                    };
+                            .map(|post| {
+                                let builder = Threads::new().unwrap();
 
-                    post = Post {
-                        id,
-                        author: out.0.author.to_owned(),
-                        date: out.0.date,
-                        body: out.0.body.to_owned(),
-                        media: out.0.media.to_owned(),
-                        likes: out.0.likes.to_owned(),
-                        parents,
-                        replies,
+                                let result = builder
+                                    .build_subpost(&post)
+                                    .map_err(|_| SpoolsError::SubpostError)
+                                    .unwrap();
+
+                                let rel = post
+                                    .pointer("/post/text_post_app_info/reply_to_author/username")
+                                    .unwrap_or(&Value::Null)
+                                    .as_str()
+                                    .unwrap_or("")
+                                    .to_string();
+
+                                (result, rel)
+                            })
+                            .collect::<Vec<(Subpost, String)>>()
+                    } else {
+                        vec![]
                     }
-                } else {
-                    return Err(SpoolsError::NotFound(Types::Post));
+                })
+                .flatten()
+                .collect();
+
+            if let Some(out) = subposts.iter().filter(|post| post.0.code == code).next() {
+                let slices: Vec<_> = subposts
+                    .split(|out| &out.0.code == code)
+                    .collect::<Vec<&[(Subpost, String)]>>();
+
+                let parents = match slices.iter().next() {
+                    Some(val) => val.iter().map(|post| post.clone().0).collect(),
+                    None => vec![],
+                };
+
+                let replies = match slices.iter().last() {
+                    Some(val) => val
+                        .iter()
+                        .filter(|val| val.1 == out.0.author.username)
+                        .map(|post| post.clone().0)
+                        .collect(),
+                    None => vec![],
+                };
+
+                post = Post {
+                    id,
+                    author: out.0.author.to_owned(),
+                    date: out.0.date,
+                    body: out.0.body.to_owned(),
+                    media: out.0.media.to_owned(),
+                    likes: out.0.likes.to_owned(),
+                    parents,
+                    replies,
                 }
             } else {
-                return Err(SpoolsError::InvalidResponse);
+                return Err(SpoolsError::NotFound(Types::Post));
             }
         } else {
             return Err(SpoolsError::deserialize_error(resp));
         }
+
         Ok(post)
     }
 }
