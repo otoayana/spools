@@ -19,6 +19,17 @@ pub struct Threads {
     client: Client,
 }
 
+// Implement internal trait to ease unwrapping strings
+trait ValueString {
+    fn clean_string(&self) -> String;
+}
+
+impl ValueString for Value {
+    fn clean_string(&self) -> String {
+        self.as_str().unwrap_or("").to_string()
+    }
+}
+
 impl Threads {
     /// Create a new [`Threads`].
     pub fn new() -> Result<Threads, SpoolsError> {
@@ -118,21 +129,12 @@ impl Threads {
                 .to_string();
 
             let author = Author {
-                username: post
-                    .pointer("/user/username")
-                    .unwrap()
-                    .as_str()
-                    .to_owned()
-                    .unwrap()
-                    .to_string(),
+                username: post.pointer("/user/username").unwrap().clean_string(),
 
                 pfp: post
                     .pointer("/user/profile_pic_url")
                     .unwrap()
-                    .as_str()
-                    .to_owned()
-                    .unwrap()
-                    .to_string(),
+                    .clean_string(),
 
                 verified: post
                     .pointer("/user/is_verified")
@@ -237,7 +239,7 @@ impl Threads {
         // These variables need to be fetched as str, otherwise they'll be wrapped in explicit quote marks
         let unquot: Vec<String> = vec!["id", "full_name", "biography"]
             .iter()
-            .map(|var| parent[var].as_str().to_owned().unwrap().to_string())
+            .map(|var| parent[var].clean_string())
             .collect();
 
         // Fetches profile picture
@@ -248,11 +250,7 @@ impl Threads {
         // We do this for safety, but if the request was successful, this should go smoothly.
         if let Value::Array(versions) = &pfp_location {
             // Gets the highest quality version of the profile pic
-            pfp = versions[versions.len() - 1]["url"]
-                .as_str()
-                .to_owned()
-                .unwrap()
-                .to_string();
+            pfp = versions[versions.len() - 1]["url"].clean_string();
         }
 
         // Sets name and bio values if applicable
@@ -276,7 +274,7 @@ impl Threads {
         if let Value::Array(link_array) = &links_parent {
             links = link_array
                 .iter()
-                .map(|link| link["url"].as_str().to_owned().unwrap().to_string())
+                .map(|link| link["url"].clean_string())
                 .collect()
         }
 
@@ -359,9 +357,7 @@ impl Threads {
                                 let rel = post
                                     .pointer("/post/text_post_app_info/reply_to_author/username")
                                     .unwrap_or(&Value::Null)
-                                    .as_str()
-                                    .unwrap_or("")
-                                    .to_string();
+                                    .clean_string();
 
                                 (result, rel)
                             })
@@ -412,3 +408,4 @@ impl Threads {
         Ok(post)
     }
 }
+
