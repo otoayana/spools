@@ -1,5 +1,6 @@
 use core::fmt;
 use serde_json::Value;
+use std::fmt::Write;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -40,22 +41,19 @@ impl SpoolsError {
         let maybe_error = response.pointer("/errors");
 
         if let Some(Value::Array(error_array)) = maybe_error {
-            SpoolsError::ResponseError(
-                error_array
-                    .iter()
-                    .map(|err| {
-                        format!(
-                            "{};",
-                            err.pointer("/description")
-                                .unwrap()
-                                .as_str()
-                                .to_owned()
-                                .unwrap()
-                                .to_string()
-                        )
-                    })
-                    .collect(),
-            )
+            SpoolsError::ResponseError(error_array.iter().fold(String::new(), |mut out, err| {
+                let _ = write!(
+                    out,
+                    "{};",
+                    err.pointer("/description")
+                        .unwrap()
+                        .as_str()
+                        .to_owned()
+                        .unwrap()
+                );
+
+                out
+            }))
         } else {
             SpoolsError::InvalidResponse
         }

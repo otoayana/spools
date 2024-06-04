@@ -237,7 +237,7 @@ impl Threads {
         let mut links: Vec<String> = vec![];
 
         // These variables need to be fetched as str, otherwise they'll be wrapped in explicit quote marks
-        let unquot: Vec<String> = vec!["id", "full_name", "biography"]
+        let unquot: Vec<String> = ["id", "full_name", "biography"]
             .iter()
             .map(|var| parent[var].clean_string())
             .collect();
@@ -291,7 +291,7 @@ impl Threads {
         let posts: Vec<Subpost> = if let Value::Array(nodes) = &edges {
             nodes
                 .iter()
-                .map(|node| {
+                .flat_map(|node| {
                     let thread_items = node.pointer("/node/thread_items").unwrap();
 
                     thread_items
@@ -300,7 +300,6 @@ impl Threads {
                         .iter()
                         .map(|bit| self.build_subpost(bit).unwrap())
                 })
-                .flatten()
                 .collect()
         } else {
             vec![]
@@ -339,7 +338,7 @@ impl Threads {
             let subposts: Vec<(Subpost, String)> = content
                 .clone()
                 .iter_mut()
-                .map(|node| {
+                .flat_map(|node| {
                     if let Value::Array(thread_items) =
                         &node.pointer("/node/thread_items").unwrap_or(&Value::Null)
                     {
@@ -350,7 +349,7 @@ impl Threads {
                                 let builder = Threads::new().unwrap();
 
                                 let result = builder
-                                    .build_subpost(&post)
+                                    .build_subpost(post)
                                     .map_err(|_| SpoolsError::SubpostError)
                                     .unwrap();
 
@@ -366,15 +365,14 @@ impl Threads {
                         vec![]
                     }
                 })
-                .flatten()
                 .collect();
 
-            if let Some(out) = subposts.iter().filter(|post| post.0.code == code).next() {
+            if let Some(out) = subposts.iter().find(|post| post.0.code == code) {
                 let slices: Vec<_> = subposts
-                    .split(|out| &out.0.code == code)
+                    .split(|out| out.0.code == code)
                     .collect::<Vec<&[(Subpost, String)]>>();
 
-                let parents = match slices.iter().next() {
+                let parents = match slices.first() {
                     Some(val) => val.iter().map(|post| post.clone().0).collect(),
                     None => vec![],
                 };
@@ -408,4 +406,3 @@ impl Threads {
         Ok(post)
     }
 }
-

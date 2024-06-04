@@ -45,7 +45,7 @@ impl Media {
         let aspect_ratio = ((image_width / image_height) * 10.0).round();
 
         let thumbnail_array: Vec<String> = image_array
-            .into_iter()
+            .iter()
             .filter(|val| {
                 aspect_ratio
                     == ((val["width"].as_f64().to_owned().unwrap()
@@ -56,7 +56,7 @@ impl Media {
             .map(|val| val["url"].as_str().unwrap().to_string())
             .collect();
 
-        let thumbnail_url = thumbnail_array[thumbnail_array.len()/3].to_owned();
+        let thumbnail_url = thumbnail_array[thumbnail_array.len() / 3].to_owned();
 
         // Alt text
         if object["accessibility_caption"].is_string() {
