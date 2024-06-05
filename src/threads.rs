@@ -25,6 +25,7 @@ trait ValueString {
 }
 
 impl ValueString for Value {
+    /// Convert serialized JSON string into clean std::String
     fn clean_string(&self) -> String {
         self.as_str().unwrap_or("").to_string()
     }
@@ -190,7 +191,6 @@ impl Threads {
                 && !image_location.as_array().unwrap_or(&vec![]).is_empty()
             {
                 // Singular media
-
                 media.push(Media::from(post.clone())?)
             }
 
@@ -246,10 +246,9 @@ impl Threads {
         let pfp_location = parent
             .pointer("/hd_profile_pic_versions")
             .unwrap_or(&Value::Null);
-
-        // We do this for safety, but if the request was successful, this should go smoothly.
+        
+        // Gets the highest quality version of the profile pic
         if let Value::Array(versions) = &pfp_location {
-            // Gets the highest quality version of the profile pic
             pfp = versions[versions.len() - 1]["url"].clean_string();
         }
 

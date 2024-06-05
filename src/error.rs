@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::fmt::Write;
 use thiserror::Error;
 
+/// Error type for spools
 #[derive(Error, Debug)]
 pub enum SpoolsError {
     #[error("{0} not found")]
@@ -19,6 +20,7 @@ pub enum SpoolsError {
     SubpostError,
 }
 
+/// Possible objects to be fetched on a request. Used for errors.
 #[derive(Debug)]
 pub enum Types {
     Post,

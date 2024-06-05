@@ -19,6 +19,7 @@ pub struct Media {
 }
 
 impl Media {
+    /// Serializes JSON structure for attachments into the Media data type
     pub(crate) fn from(object: Value) -> Result<Self, SpoolsError> {
         // Set initial values
         let mut kind = MediaKind::Image;
