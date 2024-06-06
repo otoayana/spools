@@ -636,7 +636,7 @@ checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
 name = "spools"
-version = "0.6.0-alpha"
+version = "0.6.0"
 dependencies = [
  "fastrand",
  "reqwest",
