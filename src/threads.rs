@@ -340,7 +340,7 @@ impl Threads {
 
         // Now we can fetch the actual post
         let variables = format!("\"postID\":\"{}\"", &id);
-        let resp = cloned.query(&variables, "26262423843344977").await?;
+        let resp = cloned.query(&variables, "9021231181224706").await?;
 
         let check = resp.pointer("/data/data/edges");
         let post: Post;
