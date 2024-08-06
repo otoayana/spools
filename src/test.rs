@@ -10,10 +10,10 @@ async fn new_client() {
 async fn fetch_existing_user() {
     let client = Threads::new().unwrap();
     let resp = client.fetch_user("zuck").await;
+    println!("{:#?}", resp);
     assert!(resp.is_ok());
 
     let user = resp.unwrap();
-    println!("{:#?}", user);
     assert_eq!(user.id, 314216);
     assert_eq!(user.verified, true);
 }

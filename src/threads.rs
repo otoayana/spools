@@ -6,7 +6,7 @@ use crate::{
     post::{Post, Subpost},
     user::{Author, User},
 };
-use reqwest::{header, Client};
+use reqwest::{header, Client, StatusCode};
 use serde_json::Value;
 
 /// Threads pseudo-client
@@ -86,36 +86,49 @@ impl Threads {
 
     /// Retrieve post ID from shortcode
     async fn fetch_post_id(&self, code: &str) -> Result<String, SpoolsError> {
-        let resp = self
+        let fetch = self
             .client
             .get(format!("https://www.threads.net/post/{}", code))
             .header("Sec-Fetch-Node", "navigate")
             .send()
             .await
-            .map_err(SpoolsError::RequestError)?
-            .text()
-            .await
-            .map_err(|_| SpoolsError::InvalidResponse)?;
+            .map_err(SpoolsError::RequestError)?;
 
-        // Finds the ID, located in a meta tag containing JSON data
-        let id_location = resp.find("post_id");
+        match fetch.error_for_status() {
+            Ok(fetch) => {
+                let resp = fetch
+                    .text()
+                    .await
+                    .map_err(|_| SpoolsError::InvalidResponse)?;
 
-        if id_location.is_none() {
-            return Err(SpoolsError::NotFound(Types::Post));
+                // Finds the ID, located in a meta tag containing JSON data
+                let id_location = resp.find("post_id");
+
+                if id_location.is_none() {
+                    return Err(SpoolsError::NotFound(Types::Post));
+                }
+
+                // Prepare values to select the ID
+                let mut cur = id_location.unwrap() + 10;
+                let mut curchar = resp.as_bytes()[cur] as char;
+                let mut id = String::new();
+
+                while curchar != '\"' {
+                    id.push(curchar);
+                    cur += 1;
+                    curchar = resp.as_bytes()[cur] as char;
+                }
+
+                return Ok(id);
+            }
+            Err(err) => {
+                return Err(SpoolsError::ResponseError(
+                    err.status()
+                        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+                        .to_string(),
+                ));
+            }
         }
-
-        // Prepare values to select the ID
-        let mut cur = id_location.unwrap() + 10;
-        let mut curchar = resp.as_bytes()[cur] as char;
-        let mut id = String::new();
-
-        while curchar != '\"' {
-            id.push(curchar);
-            cur += 1;
-            curchar = resp.as_bytes()[cur] as char;
-        }
-
-        Ok(id)
     }
 
     /// Deserialize the JSON query for a post
@@ -246,7 +259,7 @@ impl Threads {
         let pfp_location = parent
             .pointer("/hd_profile_pic_versions")
             .unwrap_or(&Value::Null);
-        
+
         // Gets the highest quality version of the profile pic
         if let Value::Array(versions) = &pfp_location {
             pfp = versions[versions.len() - 1]["url"].clean_string();

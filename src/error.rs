@@ -47,11 +47,11 @@ impl SpoolsError {
                 let _ = write!(
                     out,
                     "{};",
-                    err.pointer("/description")
-                        .unwrap()
+                    err.pointer("/summary")
+                        .unwrap_or(&Value::Null)
                         .as_str()
                         .to_owned()
-                        .unwrap()
+                        .unwrap_or_default()
                 );
 
                 out
