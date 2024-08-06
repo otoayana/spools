@@ -62,8 +62,25 @@ impl Threads {
 
         let params = [
             ("lsd", lsd.as_str()),
-            ("variables", &format!("{{{},\"__relay_internal__pv__BarcelonaIsLoggedInrelayprovider\":false,\"__relay_internal__pv__BarcelonaIsOriginalPostPillEnabledrelayprovider\":false,\"__relay_internal__pv__BarcelonaIsThreadContextHeaderEnabledrelayprovider\":false,
-    	\"__relay_internal__pv__BarcelonaIsSableEnabledrelayprovider\":false,\"__relay_internal__pv__BarcelonaUseCometVideoPlaybackEnginerelayprovider\":false,\"__relay_internal__pv__BarcelonaOptionalCookiesEnabledrelayprovider\":true,\"__relay_internal__pv__BarcelonaShouldShowFediverseM075Featuresrelayprovider\":false}}", variables)),
+            (
+                "variables",
+                &format!(
+                    "{{{},
+\"__relay_internal__pv__BarcelonaIsLoggedInrelayprovider\":false,
+\"__relay_internal__pv__BarcelonaShouldShowFediverseM1Featuresrelayprovider\":false,
+\"__relay_internal__pv__BarcelonaIsInlineReelsEnabledrelayprovider\":true,
+\"__relay_internal__pv__BarcelonaUseCometVideoPlaybackEnginerelayprovider\":false,
+\"__relay_internal__pv__BarcelonaOptionalCookiesEnabledrelayprovider\":true,
+\"__relay_internal__pv__BarcelonaShouldShowFediverseM075Featuresrelayprovider\":false,
+\"__relay_internal__pv__BarcelonaIsThreadContextHeaderEnabledrelayprovider\":false,
+\"__relay_internal__pv__BarcelonaIsSableEnabledrelayprovider\":false,
+\"__relay_internal__pv__BarcelonaShowReshareCountrelayprovider\":false,
+\"__relay_internal__pv__BarcelonaIsThreadContextHeaderEnabledrelayprovider\":false,
+\"__relay_internal__pv__BarcelonaIsLinkVerificationEnabledrelayprovider\":false,
+            }}",
+                    variables
+                ),
+            ),
             ("doc_id", doc_id),
         ];
 
